@@ -249,36 +249,56 @@ First create glossary terms and domains under the **Glossary** page, then assign
 
 ### 7. Connect Your AI Client
 
-Configure your MCP client (Claude Desktop, Cursor, custom agent) to point to ToolAtlas:
+Configure your MCP client (Claude Desktop, Cursor, custom agent) to point to ToolAtlas. Replace `dev` with your proxy's slug name.
 
+**Claude Desktop** (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "dev": {
+      "type": "sse",
+      "url": "http://localhost:8080/proxy/dev/sse"
+    }
+  }
+}
 ```
-Type:     SSE
-URL:      http://localhost:8080/proxy/dev/message/{session_id}
-```
 
-Each message gets a unique `session_id` (UUID). The proxy uses it to track call sequences.
+**Cursor / VS Code / any MCP client** — same format; just register an SSE server with the URL above.
 
-#### Example: Python client
+The proxy slug (`dev`, `prod`, etc.) is the name you gave when creating the proxy. Each proxy exposes a different toolset.
+
+#### Advanced: Raw JSON-RPC (without SSE)
+
+For scripting or testing without an MCP client library, use the message endpoint directly. Each call needs its own `session_id` (UUID).
 
 ```python
-import httpx
-import uuid
+import httpx, uuid
 
 session_id = str(uuid.uuid4())
 proxy_url = f"http://localhost:8080/proxy/dev/message/{session_id}"
 
+# Initialize
+httpx.post(proxy_url, json={
+    "jsonrpc": "2.0", "id": 1, "method": "initialize",
+    "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}
+}).json()
+
+# Notify initialized
+httpx.post(proxy_url, json={
+    "jsonrpc": "2.0", "method": "notifications/initialized"
+}).json()
+
 # List tools
-resp = httpx.post(proxy_url, json={
-    "jsonrpc": "2.0", "id": 1, "method": "list_tools"
-})
-print(resp.json())
+httpx.post(proxy_url, json={
+    "jsonrpc": "2.0", "id": 2, "method": "list_tools"
+}).json()
 
 # Call a tool
-resp = httpx.post(proxy_url, json={
-    "jsonrpc": "2.0", "id": 2, "method": "call_tool",
+httpx.post(proxy_url, json={
+    "jsonrpc": "2.0", "id": 3, "method": "call_tool",
     "params": {"name": "search_code", "arguments": {"query": "auth"}}
-})
-print(resp.json())
+}).json()
 ```
 
 ### 8. View Analytics
@@ -337,15 +357,23 @@ import httpx, uuid
 session_id = str(uuid.uuid4())
 base = f"http://localhost:8080/proxy/dev/message/{session_id}"
 
+# Initialize (required before any other call)
+httpx.post(base, json={
+    "jsonrpc": "2.0", "id": 1, "method": "initialize",
+    "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}
+}).json()
+
+httpx.post(base, json={"jsonrpc": "2.0", "method": "notifications/initialized"}).json()
+
 # List available tools
 tools = httpx.post(base, json={
-    "jsonrpc": "2.0", "id": 1, "method": "list_tools"
+    "jsonrpc": "2.0", "id": 2, "method": "list_tools"
 }).json()
 print(tools)
 
 # Call a tool
 result = httpx.post(base, json={
-    "jsonrpc": "2.0", "id": 2, "method": "call_tool",
+    "jsonrpc": "2.0", "id": 3, "method": "call_tool",
     "params": {"name": "search_code", "arguments": {"query": "auth"}}
 }).json()
 print(result)
@@ -356,15 +384,24 @@ print(result)
 ```bash
 SESSION_ID=$(uuidgen)
 
+# Initialize
+curl -s -X POST "http://localhost:8080/proxy/dev/message/$SESSION_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+
+curl -s -X POST "http://localhost:8080/proxy/dev/message/$SESSION_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+
 # List tools
 curl -s -X POST "http://localhost:8080/proxy/dev/message/$SESSION_ID" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"list_tools"}'
+  -d '{"jsonrpc":"2.0","id":2,"method":"list_tools"}'
 
 # Call a tool
 curl -s -X POST "http://localhost:8080/proxy/dev/message/$SESSION_ID" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"search_code","arguments":{"query":"auth"}}}'
+  -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"search_code","arguments":{"query":"auth"}}}'
 ```
 
 ---
