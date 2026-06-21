@@ -1,0 +1,7 @@
+[
+    {"term": "Repository", "definition": "A version-controlled code repository containing source code and project files.", "tool_name": "search_code"},
+    {"term": "Incident", "definition": "An unplanned event that disrupts normal service operations, requiring immediate response.", "tool_name": "list_incidents"},
+    {"term": "Sprint", "definition": "A time-boxed period (usually 2 weeks) during which a team completes a set of work items.", "tool_name": "search_issues"},
+    {"term": "Pull Request", "definition": "A method of submitting code changes for review before merging into the main branch.", "tool_name": "list_prs"},
+    {"term": "Channel", "definition": "A Slack communication channel for team discussions.", "tool_name": "list_channels"}
+]

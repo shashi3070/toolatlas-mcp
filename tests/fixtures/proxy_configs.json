@@ -1,0 +1,27 @@
+[
+    {
+        "name": "Developer",
+        "slug": "dev",
+        "description": "Tools for software developers",
+        "servers": ["GitHub", "Jira", "Confluence"],
+        "tool_overrides": {
+            "delete_repo": {"enabled": false}
+        }
+    },
+    {
+        "name": "Product Manager",
+        "slug": "pm",
+        "description": "Tools for product managers",
+        "servers": ["Jira", "Confluence", "Slack"],
+        "tool_overrides": {}
+    },
+    {
+        "name": "DevOps",
+        "slug": "devops",
+        "description": "Tools for infrastructure engineers",
+        "servers": ["AWS", "PagerDuty", "Slack", "GitHub"],
+        "tool_overrides": {
+            "delete_repo": {"enabled": false}
+        }
+    }
+]

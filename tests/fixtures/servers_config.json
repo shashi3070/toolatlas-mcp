@@ -1,0 +1,51 @@
+[
+    {
+        "name": "GitHub", "transport": "sse", "url": "http://127.0.0.1:9001", "enabled": true,
+        "tools": [
+            {"name": "search_code", "description": "Search code across GitHub repositories", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}},
+            {"name": "create_repo", "description": "Create a new GitHub repository", "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}}},
+            {"name": "delete_repo", "description": "Delete a GitHub repository", "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}}},
+            {"name": "list_issues", "description": "List GitHub issues", "input_schema": {"type": "object", "properties": {"repo": {"type": "string"}}}}
+        ]
+    },
+    {
+        "name": "Jira", "transport": "sse", "url": "http://127.0.0.1:9002", "enabled": true,
+        "tools": [
+            {"name": "search_issues", "description": "Search Jira issues", "input_schema": {"type": "object", "properties": {"jql": {"type": "string"}}}},
+            {"name": "create_issue", "description": "Create a new Jira issue", "input_schema": {"type": "object", "properties": {"project": {"type": "string"}, "summary": {"type": "string"}}}},
+            {"name": "get_issue", "description": "Get a Jira issue by key", "input_schema": {"type": "object", "properties": {"issue_key": {"type": "string"}}}}
+        ]
+    },
+    {
+        "name": "Confluence", "transport": "sse", "url": "http://127.0.0.1:9003", "enabled": true,
+        "tools": [
+            {"name": "search_pages", "description": "Search Confluence pages", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}},
+            {"name": "get_page", "description": "Get a Confluence page by ID", "input_schema": {"type": "object", "properties": {"page_id": {"type": "string"}}}},
+            {"name": "create_page", "description": "Create a new Confluence page", "input_schema": {"type": "object", "properties": {"space": {"type": "string"}, "title": {"type": "string"}}}}
+        ]
+    },
+    {
+        "name": "AWS", "transport": "sse", "url": "http://127.0.0.1:9004", "enabled": true,
+        "tools": [
+            {"name": "list_s3_buckets", "description": "List all S3 buckets", "input_schema": {"type": "object", "properties": {}}},
+            {"name": "describe_ec2_instances", "description": "Describe EC2 instances", "input_schema": {"type": "object", "properties": {"region": {"type": "string"}}}},
+            {"name": "list_lambda_functions", "description": "List Lambda functions", "input_schema": {"type": "object", "properties": {"region": {"type": "string"}}}}
+        ]
+    },
+    {
+        "name": "PagerDuty", "transport": "sse", "url": "http://127.0.0.1:9005", "enabled": true,
+        "tools": [
+            {"name": "list_incidents", "description": "List PagerDuty incidents", "input_schema": {"type": "object", "properties": {"status": {"type": "string"}}}},
+            {"name": "acknowledge_incident", "description": "Acknowledge a PagerDuty incident", "input_schema": {"type": "object", "properties": {"incident_id": {"type": "string"}}}},
+            {"name": "resolve_incident", "description": "Resolve a PagerDuty incident", "input_schema": {"type": "object", "properties": {"incident_id": {"type": "string"}}}}
+        ]
+    },
+    {
+        "name": "Slack", "transport": "sse", "url": "http://127.0.0.1:9006", "enabled": true,
+        "tools": [
+            {"name": "send_message", "description": "Send a Slack message", "input_schema": {"type": "object", "properties": {"channel": {"type": "string"}, "text": {"type": "string"}}}},
+            {"name": "list_channels", "description": "List Slack channels", "input_schema": {"type": "object", "properties": {}}},
+            {"name": "create_channel", "description": "Create a Slack channel", "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}}}
+        ]
+    }
+]
