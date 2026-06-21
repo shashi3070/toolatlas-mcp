@@ -1,2 +1,3 @@
 include README.md LICENSE
+recursive-include screenshots *.png
 recursive-include src/toolatlas_mcp/ui/dist *
