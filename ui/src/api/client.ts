@@ -115,8 +115,8 @@ export const proxiesApi = {
   delete: (id: string) => api.delete(`/proxies/${id}`),
   servers: (id: string) =>
     api.get<Server[]>(`/proxies/${id}/servers`).then((r) => r.data),
-  linkServer: (proxyId: string, serverId: string) =>
-    api.post(`/proxies/${proxyId}/servers`, { server_id: serverId }),
+  linkServer: (proxyId: string, serverId: string, toolNames?: string[]) =>
+    api.post(`/proxies/${proxyId}/servers`, { server_id: serverId, tool_names: toolNames }),
   unlinkServer: (proxyId: string, serverId: string) =>
     api.delete(`/proxies/${proxyId}/servers/${serverId}`),
   tools: (id: string) =>

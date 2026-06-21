@@ -71,8 +71,13 @@ class ProxyEngine:
                 setting = await self.repo.get_tool_setting(proxy.id, db_tool.id)
                 if setting and not setting.enabled:
                     continue
+                if setting is None:
+                    selection = await self.repo.get_proxy_server_selection(proxy.id, server.id)
+                    if selection is not None and tool_name not in selection:
+                        await self.repo.upsert_tool_setting(proxy.id, db_tool.id, enabled=False)
+                        continue
 
-                display_name = setting.alias or db_tool.name if setting else db_tool.name
+                display_name = setting.alias if setting and setting.alias else db_tool.name
                 display_desc = setting.custom_description or db_tool.description if setting else db_tool.description
 
                 enrichment = []

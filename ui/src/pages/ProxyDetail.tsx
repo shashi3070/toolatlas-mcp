@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Link2, Unlink, ToggleLeft, ToggleRight } from "lucide-react";
+import { ArrowLeft, Link2, Unlink, ToggleLeft, ToggleRight, X } from "lucide-react";
 import { proxiesApi, serversApi, type Server, type Tool } from "../api/client";
 
 export default function ProxyDetail() {
@@ -9,6 +9,10 @@ export default function ProxyDetail() {
   const [linked, setLinked] = useState<Server[]>([]);
   const [allServers, setAllServers] = useState<Server[]>([]);
   const [tools, setTools] = useState<Tool[]>([]);
+  const [showToolModal, setShowToolModal] = useState(false);
+  const [selectedServerId, setSelectedServerId] = useState("");
+  const [serverTools, setServerTools] = useState<Tool[]>([]);
+  const [checkedTools, setCheckedTools] = useState<Set<string>>(new Set());
 
   const load = async () => {
     if (!id) return;
@@ -26,8 +30,18 @@ export default function ProxyDetail() {
 
   useEffect(() => { load(); }, [id]);
 
-  const linkServer = async (serverId: string) => {
-    await proxiesApi.linkServer(id!, serverId);
+  const openToolModal = async (serverId: string) => {
+    setSelectedServerId(serverId);
+    const tools = await serversApi.discover(serverId);
+    setServerTools(tools);
+    setCheckedTools(new Set(tools.map((t) => t.id)));
+    setShowToolModal(true);
+  };
+
+  const confirmLink = async () => {
+    const names = serverTools.filter((t) => checkedTools.has(t.id)).map((t) => t.name);
+    await proxiesApi.linkServer(id!, selectedServerId, names);
+    setShowToolModal(false);
     load();
   };
 
@@ -89,7 +103,7 @@ export default function ProxyDetail() {
                 </select>
                 <button onClick={() => {
                   const sel = document.getElementById("serverSelect") as HTMLSelectElement;
-                  if (sel.value) linkServer(sel.value);
+                  if (sel.value) openToolModal(sel.value);
                 }} className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-slate-800">Link</button>
               </div>
             </div>
@@ -146,6 +160,42 @@ export default function ProxyDetail() {
           </tbody>
         </table>
       </div>
+      {showToolModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="font-semibold">Select tools from {allServers.find((s) => s.id === selectedServerId)?.name}</h3>
+              <button onClick={() => setShowToolModal(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-4 overflow-y-auto flex-1 space-y-2">
+              {serverTools.map((t) => (
+                <label key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checkedTools.has(t.id)}
+                    onChange={(e) => {
+                      const next = new Set(checkedTools);
+                      e.target.checked ? next.add(t.id) : next.delete(t.id);
+                      setCheckedTools(next);
+                    }}
+                    className="rounded border-slate-300"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">{t.name}</div>
+                    <div className="text-xs text-slate-500 truncate">{t.description}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t">
+              <button onClick={() => setShowToolModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
+              <button onClick={confirmLink} className="px-4 py-2 text-sm bg-slate-900 text-white rounded-lg hover:bg-slate-800">
+                Link {serverTools.length - checkedTools.size > 0 ? `(${checkedTools.size} tools)` : ""}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

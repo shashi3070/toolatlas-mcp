@@ -104,6 +104,7 @@ class ProxyResponse(ResponseModel):
 
 class ProxyLinkServer(BaseModel):
     server_id: str
+    tool_names: list[str] | None = None
 
 
 class ToolSettingUpdate(BaseModel):

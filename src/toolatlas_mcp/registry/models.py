@@ -74,6 +74,7 @@ class ProxyServer(Base):
 
     proxy_id = Column(String, ForeignKey("proxies.id", ondelete="CASCADE"), primary_key=True)
     server_id = Column(String, ForeignKey("servers.id", ondelete="CASCADE"), primary_key=True)
+    selected_tools = Column(JSON, nullable=True)
 
     proxy = relationship("Proxy", back_populates="server_links")
     server = relationship("Server", back_populates="proxy_links")

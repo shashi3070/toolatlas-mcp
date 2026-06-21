@@ -158,16 +158,29 @@ class RegistryRepository:
 
     # ---- Proxy-Server links ----
 
-    async def link_server_to_proxy(self, proxy_id: str, server_id: str):
+    async def link_server_to_proxy(self, proxy_id: str, server_id: str, selected_tools: list[str] | None = None):
         existing = await self.db.execute(
             select(ProxyServer).where(
                 ProxyServer.proxy_id == proxy_id, ProxyServer.server_id == server_id
             )
         )
-        if not existing.scalar_one_or_none():
-            link = ProxyServer(proxy_id=proxy_id, server_id=server_id)
+        link = existing.scalar_one_or_none()
+        if link:
+            if selected_tools is not None:
+                link.selected_tools = selected_tools
+        else:
+            link = ProxyServer(proxy_id=proxy_id, server_id=server_id, selected_tools=selected_tools)
             self.db.add(link)
-            await self.commit()
+        await self.commit()
+
+    async def get_proxy_server_selection(self, proxy_id: str, server_id: str) -> list[str] | None:
+        result = await self.db.execute(
+            select(ProxyServer).where(
+                ProxyServer.proxy_id == proxy_id, ProxyServer.server_id == server_id
+            )
+        )
+        link = result.scalar_one_or_none()
+        return link.selected_tools if link else None
 
     async def unlink_server_from_proxy(self, proxy_id: str, server_id: str):
         await self.db.execute(

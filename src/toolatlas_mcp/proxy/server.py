@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
+from toolatlas_mcp import __version__
 from toolatlas_mcp.db import async_session_factory
 from toolatlas_mcp.proxy.engine import ProxyEngine
 
@@ -60,7 +61,7 @@ async def proxy_message(slug: str, session_id: str, request: Request):
             result = {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "toolatlas-mcp", "version": "0.1.0"},
+                "serverInfo": {"name": "toolatlas-mcp", "version": __version__},
             }
             _sessions[session_id] = {"initialized": True}
             return JSONResponse({"jsonrpc": "2.0", "id": msg_id, "result": result})

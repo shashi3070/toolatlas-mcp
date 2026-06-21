@@ -223,6 +223,8 @@ List your proxies:
 toolatlas proxy list
 ```
 
+> **Tip:** In the web UI, when linking a server you can **select exactly which tools** to expose — unselected tools are automatically disabled for that proxy. No need to manually toggle them afterwards.
+
 ### 5. Configure Tools Per Proxy
 
 In the web UI, go to a **Proxy detail page** → **Tools** tab. For each tool:
@@ -230,6 +232,8 @@ In the web UI, go to a **Proxy detail page** → **Tools** tab. For each tool:
 - **Toggle enabled/disabled** — disable `delete_repo` for the "dev" proxy
 - **Set a custom description** — e.g., "Search code in GitHub repos"
 - **Alias the tool** — rename it for clarity
+
+You can also select which tools to include at link time — click **Link** next to a server to open the tool picker modal.
 
 ### 6. Enrich Tool Metadata
 

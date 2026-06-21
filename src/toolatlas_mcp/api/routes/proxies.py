@@ -89,7 +89,12 @@ async def link_server(proxy_id: str, body: ProxyLinkServer, db: AsyncSession = D
     server = await repo.get_server(body.server_id)
     if not server:
         raise HTTPException(404, "Server not found")
-    await repo.link_server_to_proxy(proxy_id, body.server_id)
+    await repo.link_server_to_proxy(proxy_id, body.server_id, selected_tools=body.tool_names)
+    if body.tool_names is not None:
+        server_tools = await repo.list_tools(server_id=body.server_id)
+        for t in server_tools:
+            if t.name not in body.tool_names:
+                await repo.upsert_tool_setting(proxy_id, t.id, enabled=False)
     return {"ok": True}
 
 
