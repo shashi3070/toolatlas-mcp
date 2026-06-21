@@ -44,7 +44,7 @@ Clients speak MCP to ToolAtlas. ToolAtlas enforces governance, enriches tool des
 
 ## Features
 
-![Dashboard](screenshots/dashboard.png)
+![Dashboard](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/dashboard.png)
 
 ### 🗂️ Proxy Groups — Organize Tools by Team or Purpose
 Create proxies (named groups) and assign MCP servers to each. Every proxy exposes a different toolset.
@@ -62,7 +62,7 @@ http://localhost:8080/proxy/dev/message/{session_id}
 http://localhost:8080/proxy/pm/message/{session_id}
 ```
 
-![Proxy Configuration](screenshots/proxy.png)
+![Proxy Configuration](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/proxy.png)
 
 ### 🛡️ Per-Tool Governance — Control What Each Proxy Exposes
 Every tool can be independently configured **per proxy**:
@@ -80,7 +80,7 @@ Proxy "dev":  ✓ search_code  ✓ create_repo  ✗ delete_repo  ✓ list_issues
 Proxy "pm":   ✓ search_code  ✗ create_repo  ✗ delete_repo  ✓ list_issues (read-only)
 ```
 
-![Tool Detail & Enrichment](screenshots/tool1.png)
+![Tool Detail & Enrichment](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/tool1.png)
 
 ### 🏷️ Tool Enrichment — Make Tools Smarter
 Every registry tool can be enriched with business context. The enriched description is what clients see when they call `list_tools`:
@@ -105,7 +105,7 @@ Client sees the full enriched description automatically:
 ### 📊 Usage Analytics
 Every tool call is tracked — duration, success/failure, arguments. Dashboard shows top tools, latency trends, error rates, and per-call trace timelines.
 
-![Analytics](screenshots/analytics%20page.png)
+![Analytics](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/analytics%20page.png)
 
 ### 🌐 Web Dashboard
 Full SPA for managing everything visually — servers, proxies, tool settings, glossary, analytics.
@@ -170,7 +170,7 @@ Open **http://localhost:8080** in your browser to see the dashboard.
 
 ### 2. Add an MCP Server
 
-![Server Management](screenshots/server.png)
+![Server Management](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/server.png)
 
 You can add servers via CLI or the web UI.
 
@@ -233,7 +233,7 @@ In the web UI, go to a **Proxy detail page** → **Tools** tab. For each tool:
 
 ### 6. Enrich Tool Metadata
 
-![Tool Enrichment Settings](screenshots/tool%20update%20screen.png)
+![Tool Enrichment Settings](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/tool%20update%20screen.png)
 
 In the **Tool detail page**, you can add:
 
