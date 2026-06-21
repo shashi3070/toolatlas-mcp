@@ -1,48 +1,43 @@
-# ToolAtlas-MCP
+# ToolAtlas
 
-**The Control Plane for Your MCP Tools**
+**The Knowledge Layer for MCP Tools**
 
 [![PyPI version](https://img.shields.io/pypi/v/toolatlas-mcp)](https://pypi.org/project/toolatlas-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/toolatlas-mcp)](https://pypi.org/project/toolatlas-mcp/)
 [![License](https://img.shields.io/pypi/l/toolatlas-mcp)](LICENSE)
 
-ToolAtlas sits between AI clients and MCP servers — giving you a **central registry**, **intelligent proxy**, **per-tool governance**, **usage analytics**, and a **web dashboard**.
+![Architecture](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/toolatlas-architecture.png)
 
-```
+ToolAtlas helps organizations **discover, govern, understand, and optimize** MCP tools without modifying existing MCP servers.
+
+```bash
 pip install toolatlas-mcp
 toolatlas start
 ```
 
 ---
 
-## Architecture
+## Why ToolAtlas?
 
-```
-┌─────────────────┐     ┌─────────────────────────────────────┐     ┌─────────────────┐
-│  MCP Clients    │     │         ToolAtlas                    │     │  MCP Servers     │
-│                 │     │                                     │     │                  │
-│  Claude         │────▶│  Proxy "dev"     ── governance ──▶ │────▶│  GitHub MCP      │
-│  Cursor         │────▶│  Proxy "pm"      ── governance ──▶ │────▶│  Jira MCP        │
-│  Custom Agents  │────▶│  Proxy "devops"  ── governance ──▶ │────▶│  Slack MCP       │
-│                 │     │                                     │     │  Confluence MCP  │
-│                 │     │  ┌──────────────┐  ┌─────────────┐ │     │  PagerDuty MCP   │
-│                 │     │  │ Registry     │  │ Analytics   │ │     │  AWS MCP         │
-│                 │     │  │ DB + API     │  │ Tracker     │ │     └─────────────────┘
-│                 │     │  └──────────────┘  └─────────────┘ │
-│                 │     │  ┌──────────────────────────────┐  │
-│                 │     │  │  Web Dashboard (React SPA)   │  │
-│                 │     │  └──────────────────────────────┘  │
-│                 │     │  ┌──────────────────────────────┐  │
-│                 │     │  │  CLI: toolatlas start/add    │  │
-│                 │     │  └──────────────────────────────┘  │
-│                 │     └─────────────────────────────────────┘
-```
+As MCP adoption grows, teams quickly accumulate hundreds of tools across GitHub, Jira, Confluence, AWS, Databricks, Slack, internal systems, and custom MCP servers. **The challenge is no longer connecting tools — it's understanding them.**
 
-Clients speak MCP to ToolAtlas. ToolAtlas enforces governance, enriches tool descriptions, logs every call, and forwards to real MCP servers.
+| Problem | How ToolAtlas Solves It |
+|---------|------------------------|
+| **Tool Sprawl** | Central catalog of every MCP tool — see what exists, what's used, what's duplicated, what's dangerous |
+| **Lack of Business Context** | Add business descriptions, aliases, tags, domain categories, and glossary definitions — without modifying the original server |
+| **Governance** | Per-proxy enable/disable, tool selection on server link, audit logging via call traces |
+| **Tool Intelligence** | Usage analytics, success rates, latency tracking, top tools by usage |
+
+ToolAtlas sits between AI clients and MCP servers — it's the **control plane** for your MCP ecosystem.
+
+> "LiteLLM manages models. **ToolAtlas manages tools.** "
 
 ---
 
-## Features
+## Key Features
+
+### 📋 MCP Tool Catalog
+Central inventory of all MCP tools across all your servers — searchable, filterable, sortable from the web dashboard.
 
 ![Dashboard](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/dashboard.png)
 
@@ -55,13 +50,6 @@ Proxy "pm"     → Jira + Confluence   (for project managers)
 Proxy "devops" → AWS + PagerDuty     (for operations)
 ```
 
-Each proxy gets its own endpoint:
-
-```
-http://localhost:8080/proxy/dev/message/{session_id}
-http://localhost:8080/proxy/pm/message/{session_id}
-```
-
 ![Proxy Configuration](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/proxy.png)
 
 ### 🛡️ Per-Tool Governance — Control What Each Proxy Exposes
@@ -72,13 +60,7 @@ Every tool can be independently configured **per proxy**:
 | **Enable / Disable** | Block dangerous tools (e.g. `delete_repo`) without touching the server |
 | **Custom Description** | Rewrite the tool's description so AI agents understand it in context |
 | **Alias** | Rename the tool per proxy |
-
-Example — same server, different proxy settings:
-
-```
-Proxy "dev":  ✓ search_code  ✓ create_repo  ✗ delete_repo  ✓ list_issues
-Proxy "pm":   ✓ search_code  ✗ create_repo  ✗ delete_repo  ✓ list_issues (read-only)
-```
+| **Tool Selection on Link** | Pick exactly which tools to expose when linking a server — unselected tools auto-disable |
 
 ![Tool Detail & Enrichment](https://raw.githubusercontent.com/shashi3070/toolatlas-mcp/main/screenshots/tool1.png)
 
@@ -109,6 +91,40 @@ Every tool call is tracked — duration, success/failure, arguments. Dashboard s
 
 ### 🌐 Web Dashboard
 Full SPA for managing everything visually — servers, proxies, tool settings, glossary, analytics.
+
+### 🔮 Planned Features
+| Feature | Status |
+|---------|--------|
+| **Tool Testing Console** — Test tools directly from the UI | Planned |
+| **Tool Graph** — Visualize relationships between tools and discover real execution workflows | Planned |
+| **Tool Recommendations** — Recommend the best tools for tasks based on usage patterns | Planned |
+
+---
+
+## Architecture
+
+```
+┌─────────────────┐     ┌─────────────────────────────────────┐     ┌─────────────────┐
+│  MCP Clients    │     │         ToolAtlas                    │     │  MCP Servers     │
+│                 │     │                                     │     │                  │
+│  Claude         │────▶│  Proxy "dev"     ── governance ──▶ │────▶│  GitHub MCP      │
+│  Cursor         │────▶│  Proxy "pm"      ── governance ──▶ │────▶│  Jira MCP        │
+│  Custom Agents  │────▶│  Proxy "devops"  ── governance ──▶ │────▶│  Slack MCP       │
+│                 │     │                                     │     │  Confluence MCP  │
+│                 │     │  ┌──────────────┐  ┌─────────────┐ │     │  AWS MCP         │
+│                 │     │  │ Registry     │  │ Analytics   │ │     │  Custom MCP      │
+│                 │     │  │ DB + API     │  │ Tracker     │ │     └─────────────────┘
+│                 │     │  └──────────────┘  └─────────────┘ │
+│                 │     │  ┌──────────────────────────────┐  │
+│                 │     │  │  Web Dashboard (React SPA)   │  │
+│                 │     │  └──────────────────────────────┘  │
+│                 │     │  ┌──────────────────────────────┐  │
+│                 │     │  │  CLI: toolatlas start/add    │  │
+│                 │     │  └──────────────────────────────┘  │
+│                 │     └─────────────────────────────────────┘
+```
+
+Clients speak MCP to ToolAtlas. ToolAtlas enforces governance, enriches tool descriptions, logs every call, and forwards to real MCP servers.
 
 ---
 
@@ -161,7 +177,7 @@ toolatlas start
 
 Output:
 ```
-ToolAtlas-MCP starting on 127.0.0.1:8080
+ToolAtlas starting on 127.0.0.1:8080
   Web UI: http://127.0.0.1:8080
   API:    http://127.0.0.1:8080/api/health
 ```
