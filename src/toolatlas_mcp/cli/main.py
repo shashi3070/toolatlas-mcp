@@ -69,7 +69,7 @@ def start(
         settings.storage_type = storage
     else:
         while True:
-            val = typer.prompt("Storage type", default="json")
+            val = typer.prompt("Storage type (json/sqlite)", default="json")
             if val in ("json", "sqlite"):
                 break
             console.print("[red]Invalid choice. Enter 'json' or 'sqlite'.[/]")
