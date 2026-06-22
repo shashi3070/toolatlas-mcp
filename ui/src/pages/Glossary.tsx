@@ -5,7 +5,7 @@ import { glossaryApi, type GlossaryTerm, type Domain } from "../api/client";
 export default function Glossary() {
   const [terms, setTerms] = useState<GlossaryTerm[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
-  const [tab, setTab] = useState<"terms" | "domains">("terms");
+  const [tab, setTab] = useState<"domains" | "terms">("domains");
 
   const load = () => {
     glossaryApi.listTerms().then(setTerms);
@@ -21,12 +21,12 @@ export default function Glossary() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setTab("terms")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "terms" ? "bg-blue-600 text-white" : "border hover:bg-slate-50"}`}>Terms</button>
         <button onClick={() => setTab("domains")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "domains" ? "bg-blue-600 text-white" : "border hover:bg-slate-50"}`}>Domains</button>
+        <button onClick={() => setTab("terms")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "terms" ? "bg-blue-600 text-white" : "border hover:bg-slate-50"}`}>Terms</button>
       </div>
 
-      {tab === "terms" && <TermsPanel terms={terms} domains={domains} onRefresh={load} />}
       {tab === "domains" && <DomainsPanel domains={domains} onRefresh={load} />}
+      {tab === "terms" && <TermsPanel terms={terms} domains={domains} onRefresh={load} />}
     </div>
   );
 }
