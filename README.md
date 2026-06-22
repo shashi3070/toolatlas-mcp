@@ -92,10 +92,12 @@ Every tool call is tracked — duration, success/failure, arguments. Dashboard s
 ### 🌐 Web Dashboard
 Full SPA for managing everything visually — servers, proxies, tool settings, glossary, analytics.
 
+### 🧪 Tool Testing Console
+Test any tool directly from the UI — pass arguments via a dynamic form (auto-generated from the tool's input schema) and see the result in real time with duration tracking.
+
 ### 🔮 Planned Features
 | Feature | Status |
 |---------|--------|
-| **Tool Testing Console** — Test tools directly from the UI | Planned |
 | **Tool Graph** — Visualize relationships between tools and discover real execution workflows | Planned |
 | **Tool Recommendations** — Recommend the best tools for tasks based on usage patterns | Planned |
 
@@ -330,16 +332,24 @@ Go to the **Analytics** page in the web UI to see:
 
 | Command | Description |
 |---------|-------------|
-| `toolatlas start` | Start the ToolAtlas server (default: `127.0.0.1:8080`) |
+| `toolatlas start` | Start the ToolAtlas server (interactive prompts for storage setup) |
 | `toolatlas start --port 9000 --host 0.0.0.0` | Start on a different address |
 | `toolatlas start --reload` | Start with auto-reload (development) |
-| `toolatlas server add <name>` | Register a new MCP server |
-| `toolatlas server list` | List all registered servers |
-| `toolatlas proxy add <slug>` | Create a new proxy |
-| `toolatlas proxy list` | List all proxies |
-| `toolatlas proxy link <slug> <server>` | Link a server to a proxy |
+
+The CLI will prompt for data directory and storage type on first run. Set `TOOLATLAS_DATA_DIR` and `TOOLATLAS_STORAGE_TYPE` environment variables to skip prompts for non-interactive use.
 
 ---
+
+## Storage
+
+ToolAtlas supports two storage backends:
+
+| Backend | Type | Best for |
+|---------|------|----------|
+| **SQLite** (default) | `sqlite` | Production, multi-user, analytics-heavy workloads |
+| **JSON File** | `json` | Development, single-user, portable setups, git-versioned data |
+
+The `data.json` file is saved to the same data directory as the SQLite database.
 
 ## Configuration
 
@@ -348,17 +358,28 @@ Set via environment variables with `TOOLATLAS_` prefix:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TOOLATLAS_HOST` | `127.0.0.1` | Bind address |
-| `TOOLATLAS_PORT` | `8080` | HTTP port |
-| `TOOLATLAS_DATABASE_URL` | `sqlite+aiosqlite:///toolatlas.db` | Database connection |
+| `TOOLATLAS_PORT` | `8080` | HTTP port (auto-increments if in use) |
+| `TOOLATLAS_DATABASE_URL` | `sqlite+aiosqlite:///<data_dir>/toolatlas.db` | Database connection |
+| `TOOLATLAS_STORAGE_TYPE` | `sqlite` | Storage backend (`sqlite` or `json`) |
+| `TOOLATLAS_DATA_DIR` | `~/.toolatlas` (Unix) / `%APPDATA%\ToolAtlas` (Win) | Data directory for databases and config |
 | `TOOLATLAS_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
+
+When starting interactively, you'll be prompted for the data directory and storage type if the environment variables aren't set. The CLI automatically scans for a free port (8080→8280) if the default port is occupied.
 
 Example:
 
 ```bash
 export TOOLATLAS_HOST=0.0.0.0
 export TOOLATLAS_PORT=9000
-export TOOLATLAS_LOG_LEVEL=DEBUG
+export TOOLATLAS_STORAGE_TYPE=json
+export TOOLATLAS_DATA_DIR=./toolatlas-dev
 toolatlas start
+```
+
+To use non-interactive mode (no prompts):
+
+```bash
+TOOLATLAS_DATA_DIR=/custom/path TOOLATLAS_STORAGE_TYPE=json toolatlas start
 ```
 
 ---

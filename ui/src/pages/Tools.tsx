@@ -1,12 +1,21 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, Pencil } from "lucide-react";
-import { toolsApi, glossaryApi, type Tool, type Domain } from "../api/client";
+import { ExternalLink, Pencil, Search, X } from "lucide-react";
+import { toolsApi, glossaryApi, serversApi, type Tool, type Domain, type Server } from "../api/client";
 
 export default function Tools() {
   const [tools, setTools] = useState<Tool[]>([]);
+  const [servers, setServers] = useState<Server[]>([]);
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [filterServer, setFilterServer] = useState("");
+  const [filterDomain, setFilterDomain] = useState("");
+  const [search, setSearch] = useState("");
 
-  const load = () => toolsApi.list().then(setTools);
+  const load = () => Promise.all([
+    toolsApi.list(),
+    serversApi.list(),
+    glossaryApi.listDomains().catch(() => []),
+  ]).then(([t, s, d]) => { setTools(t); setServers(s); setDomains(d); });
 
   useEffect(() => { load(); }, []);
 
@@ -15,14 +24,64 @@ export default function Tools() {
     load();
   };
 
+  const filtered = tools.filter((t) => {
+    if (filterServer && t.server_id !== filterServer) return false;
+    if (filterDomain && !(t.domain || []).includes(filterDomain)) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      if (!t.name.toLowerCase().includes(s) && !t.description.toLowerCase().includes(s)) return false;
+    }
+    return true;
+  });
+
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Tools</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold">Tools</h2>
+        <span className="text-sm text-slate-400">{filtered.length} of {tools.length} tools</span>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border p-3 mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search tools..."
+            className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm"
+          />
+        </div>
+        <select
+          value={filterServer}
+          onChange={(e) => setFilterServer(e.target.value)}
+          className="border rounded-lg px-3 py-2 text-sm bg-white min-w-[150px]"
+        >
+          <option value="">All Servers</option>
+          {servers.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        <select
+          value={filterDomain}
+          onChange={(e) => setFilterDomain(e.target.value)}
+          className="border rounded-lg px-3 py-2 text-sm bg-white min-w-[150px]"
+        >
+          <option value="">All Domains</option>
+          {domains.map((d) => (
+            <option key={d.id} value={d.name}>{d.name}</option>
+          ))}
+        </select>
+        {(filterServer || filterDomain || search) && (
+          <button onClick={() => { setFilterServer(""); setFilterDomain(""); setSearch(""); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+            <X size={14} /> Clear
+          </button>
+        )}
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-slate-50 text-left">
+            <tr className="border-b bg-blue-50 text-left">
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Server</th>
               <th className="px-4 py-3 font-medium">Description</th>
@@ -33,7 +92,7 @@ export default function Tools() {
             </tr>
           </thead>
           <tbody>
-            {tools.map((t) => (
+            {filtered.map((t) => (
               <tr key={t.id} className="border-b hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <Link to={`/tools/${t.id}`} className="font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
@@ -59,8 +118,8 @@ export default function Tools() {
                 </td>
               </tr>
             ))}
-            {tools.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No tools discovered</td></tr>
+            {filtered.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No tools match filters</td></tr>
             )}
           </tbody>
         </table>
@@ -142,7 +201,7 @@ function ToolEditDialog({ tool, onSave }: { tool: Tool; onSave: (data: Partial<T
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={save} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800">Save</button>
+              <button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">Save</button>
               <button onClick={() => setOpen(false)} className="border px-4 py-2 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
             </div>
           </div>

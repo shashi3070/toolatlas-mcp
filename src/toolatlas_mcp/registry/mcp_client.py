@@ -21,6 +21,7 @@ class MCPClient:
         self._listener_task: asyncio.Task | None = None
         self._endpoint_received: asyncio.Event | None = None
         self._connected = False
+        self._session_id: str | None = None
 
     async def connect(self):
         if self.transport == "sse":
@@ -88,7 +89,7 @@ class MCPClient:
     async def _connect_streamable_http(self):
         if not self.url:
             raise ValueError("url is required for streamable-http transport")
-        self._message_url = self.url.rstrip("/")
+        self._message_url = self.url
         self._http_client = httpx.AsyncClient(timeout=30.0)
         self._connected = True
 
@@ -159,24 +160,30 @@ class MCPClient:
     async def _send_streamable_http(self, payload: dict):
         if not self._http_client or not self._message_url:
             raise RuntimeError("MCP client not connected")
+        headers = {"Accept": "text/event-stream", "Content-Type": "application/json"}
+        if self._session_id:
+            headers["mcp-session-id"] = self._session_id
         async with self._http_client.stream(
-            "POST",
-            self._message_url,
-            json=payload,
-            headers={"Accept": "text/event-stream"},
+            "POST", self._message_url, json=payload, headers=headers,
         ) as stream:
+            self._session_id = stream.headers.get("mcp-session-id")
+            if not stream.headers.get("content-type", "").startswith("text/event-stream"):
+                raw = await stream.aread()
+                if raw.strip():
+                    data = json.loads(raw)
+                    msg_id = data.get("id")
+                    if msg_id and msg_id in self._pending:
+                        self._pending.pop(msg_id).set_result(data)
+                return
             current_event = ""
             async for line in stream.aiter_lines():
                 if line.startswith("event: "):
                     current_event = line[7:].strip()
-                elif line.startswith("data: ") and current_event == "message":
-                    data = json.loads(line[6:].strip())
-                    msg_id = data.get("id")
-                    if msg_id and msg_id in self._pending:
-                        self._pending.pop(msg_id).set_result(data)
-                    return
                 elif line.startswith("data: "):
-                    data = json.loads(line[6:].strip())
+                    raw = line[6:].strip()
+                    if not raw:
+                        continue
+                    data = json.loads(raw)
                     msg_id = data.get("id")
                     if msg_id and msg_id in self._pending:
                         self._pending.pop(msg_id).set_result(data)

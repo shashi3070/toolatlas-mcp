@@ -39,6 +39,7 @@ dependencies = [
     "typer>=0.9",
     "rich>=13.0",
     "sse-starlette>=2.0",
+    "click>=8.0",
 ]
 
 [project.optional-dependencies]

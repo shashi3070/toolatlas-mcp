@@ -9,6 +9,7 @@ from toolatlas_mcp.api.routes import analytics, glossary, proxies, servers, tool
 from toolatlas_mcp import __version__
 from toolatlas_mcp.config import settings
 from toolatlas_mcp.db import close_db, init_db
+from toolatlas_mcp.proxy.engine import close_all_engines
 
 log = logging.getLogger(__name__)
 
@@ -48,12 +49,15 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup():
-        await init_db()
+        if settings.storage_type == "sqlite":
+            await init_db()
         log.info("ToolAtlas-MCP started on %s:%s", settings.host, settings.port)
 
     @app.on_event("shutdown")
     async def shutdown():
-        await close_db()
+        close_all_engines()
+        if settings.storage_type == "sqlite":
+            await close_db()
         log.info("ToolAtlas-MCP stopped")
 
     @app.get("/api/health")

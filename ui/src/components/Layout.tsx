@@ -15,10 +15,10 @@ const navItems = [
 export default function Layout() {
   return (
     <div className="flex h-screen">
-      <aside className="w-56 bg-slate-900 text-white flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-700">
+      <aside className="w-56 bg-blue-700 text-white flex flex-col shrink-0">
+        <div className="p-4 border-b border-blue-600">
           <h1 className="text-lg font-bold tracking-tight">ToolAtlas</h1>
-          <p className="text-xs text-slate-400">MCP Control Plane</p>
+          <p className="text-xs text-blue-200">MCP Control Plane</p>
         </div>
         <nav className="flex-1 p-2 space-y-1">
           {navItems.map(({ to, label, icon: Icon }) => (
@@ -29,8 +29,8 @@ export default function Layout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive
-                    ? "bg-slate-700 text-white font-medium"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                    ? "bg-blue-800 text-white font-medium"
+                    : "text-blue-100 hover:bg-blue-600 hover:text-white"
                 }`
               }
             >
@@ -39,11 +39,11 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-slate-700 text-xs text-slate-500">
+        <div className="p-3 border-t border-blue-600 text-xs text-blue-200">
           v0.1.0
         </div>
       </aside>
-      <main className="flex-1 overflow-auto p-6">
+      <main className="flex-1 overflow-auto p-6 bg-slate-50">
         <Outlet />
       </main>
     </div>

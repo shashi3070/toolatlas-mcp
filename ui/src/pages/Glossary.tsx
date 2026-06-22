@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
 import { glossaryApi, type GlossaryTerm, type Domain } from "../api/client";
 
 export default function Glossary() {
@@ -21,8 +21,8 @@ export default function Glossary() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setTab("terms")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "terms" ? "bg-slate-900 text-white" : "border hover:bg-slate-50"}`}>Terms</button>
-        <button onClick={() => setTab("domains")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "domains" ? "bg-slate-900 text-white" : "border hover:bg-slate-50"}`}>Domains</button>
+        <button onClick={() => setTab("terms")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "terms" ? "bg-blue-600 text-white" : "border hover:bg-slate-50"}`}>Terms</button>
+        <button onClick={() => setTab("domains")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "domains" ? "bg-blue-600 text-white" : "border hover:bg-slate-50"}`}>Domains</button>
       </div>
 
       {tab === "terms" && <TermsPanel terms={terms} onRefresh={load} />}
@@ -35,6 +35,7 @@ function TermsPanel({ terms, onRefresh }: { terms: GlossaryTerm[]; onRefresh: ()
   const [showForm, setShowForm] = useState(false);
   const [term, setTerm] = useState("");
   const [definition, setDefinition] = useState("");
+  const [search, setSearch] = useState("");
 
   const save = async () => {
     await glossaryApi.createTerm({ term, definition });
@@ -51,11 +52,25 @@ function TermsPanel({ terms, onRefresh }: { terms: GlossaryTerm[]; onRefresh: ()
     }
   };
 
+  const filtered = terms.filter((t) => {
+    if (search && !t.term.toLowerCase().includes(search.toLowerCase()) && !t.definition.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <div>
-      <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800 mb-4">
-        <Plus size={16} /> Add Term
-      </button>
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+          <Plus size={16} /> Add Term
+        </button>
+        <div className="relative flex-1 max-w-xs">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search terms..." className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm" />
+        </div>
+        {search && (
+          <button onClick={() => setSearch("")} className="text-xs text-blue-600 hover:text-blue-800">Clear</button>
+        )}
+      </div>
 
       {showForm && (
         <div className="bg-white rounded-xl shadow-sm border p-5 mb-4">
@@ -70,7 +85,7 @@ function TermsPanel({ terms, onRefresh }: { terms: GlossaryTerm[]; onRefresh: ()
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={save} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800">Add</button>
+            <button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">Add</button>
             <button onClick={() => setShowForm(false)} className="border px-4 py-2 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
           </div>
         </div>
@@ -86,7 +101,7 @@ function TermsPanel({ terms, onRefresh }: { terms: GlossaryTerm[]; onRefresh: ()
             </tr>
           </thead>
           <tbody>
-            {terms.map((t) => (
+            {filtered.map((t) => (
               <tr key={t.id} className="border-b hover:bg-slate-50">
                 <td className="px-4 py-3 font-medium">{t.term}</td>
                 <td className="px-4 py-3 text-slate-600">{t.definition}</td>
@@ -95,8 +110,8 @@ function TermsPanel({ terms, onRefresh }: { terms: GlossaryTerm[]; onRefresh: ()
                 </td>
               </tr>
             ))}
-            {terms.length === 0 && (
-              <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400">No terms defined</td></tr>
+            {filtered.length === 0 && (
+              <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400">{terms.length === 0 ? "No terms defined" : "No terms match filters."}</td></tr>
             )}
           </tbody>
         </table>
@@ -109,6 +124,7 @@ function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: ()
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [search, setSearch] = useState("");
 
   const save = async () => {
     await glossaryApi.createDomain({ name, description });
@@ -118,11 +134,25 @@ function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: ()
     onRefresh();
   };
 
+  const filtered = domains.filter((d) => {
+    if (search && !d.name.toLowerCase().includes(search.toLowerCase()) && !(d.description || "").toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <div>
-      <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800 mb-4">
-        <Plus size={16} /> Add Domain
-      </button>
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+          <Plus size={16} /> Add Domain
+        </button>
+        <div className="relative flex-1 max-w-xs">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search domains..." className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm" />
+        </div>
+        {search && (
+          <button onClick={() => setSearch("")} className="text-xs text-blue-600 hover:text-blue-800">Clear</button>
+        )}
+      </div>
 
       {showForm && (
         <div className="bg-white rounded-xl shadow-sm border p-5 mb-4">
@@ -137,21 +167,21 @@ function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: ()
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={save} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800">Add</button>
+            <button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">Add</button>
             <button onClick={() => setShowForm(false)} className="border px-4 py-2 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
           </div>
         </div>
       )}
 
       <div className="grid gap-3">
-        {domains.map((d) => (
+        {filtered.map((d) => (
           <div key={d.id} className="bg-white rounded-xl shadow-sm border p-4">
             <h4 className="font-medium">{d.name}</h4>
             <p className="text-sm text-slate-500">{d.description}</p>
           </div>
         ))}
-        {domains.length === 0 && (
-          <p className="text-center text-slate-400 py-8">No domains defined</p>
+        {filtered.length === 0 && (
+          <p className="text-center text-slate-400 py-8">{domains.length === 0 ? "No domains defined" : "No domains match filters."}</p>
         )}
       </div>
     </div>

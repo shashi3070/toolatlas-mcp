@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from toolatlas_mcp import __version__
-from toolatlas_mcp.db import async_session_factory
+from toolatlas_mcp.db import get_storage
 from toolatlas_mcp.proxy.engine import ProxyEngine
 
 log = logging.getLogger(__name__)
@@ -17,9 +17,20 @@ router = APIRouter()
 _sessions: dict[str, dict] = {}
 
 
-async def get_engine() -> ProxyEngine:
-    db = async_session_factory()
-    return ProxyEngine(db)
+def _make_response(msg_id: str | int | None, result: dict | None = None, error: dict | None = None) -> JSONResponse:
+    body: dict = {"jsonrpc": "2.0"}
+    if msg_id is not None:
+        body["id"] = msg_id
+    if error:
+        body["error"] = error
+    else:
+        body["result"] = result or {}
+    return JSONResponse(body)
+
+
+def _send_to_session(session_id: str, response: dict):
+    if session_id in _sessions:
+        _sessions[session_id]["response"] = response
 
 
 @router.get("/proxy/{slug}/sse")
@@ -53,57 +64,42 @@ async def proxy_message(slug: str, session_id: str, request: Request):
     method = body.get("method", "")
     msg_id = body.get("id")
 
-    engine = await get_engine()
-    try:
-        await engine.initialize_proxy(slug)
+    async for storage in get_storage():
+        engine = ProxyEngine(storage)
+        try:
+            await engine.initialize_proxy(slug)
 
-        if method == "initialize":
-            result = {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "toolatlas-mcp", "version": __version__},
-            }
-            _sessions[session_id] = {"initialized": True}
-            return JSONResponse({"jsonrpc": "2.0", "id": msg_id, "result": result})
+            if method in ("initialize",):
+                result = {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "toolatlas-mcp", "version": __version__},
+                }
+                _sessions[session_id] = {"initialized": True}
+                return _make_response(msg_id, result)
 
-        elif method == "notifications/initialized":
-            return JSONResponse({"jsonrpc": "2.0", "id": msg_id, "result": {}})
+            if method in ("notifications/initialized",):
+                return _make_response(None, {})
 
-        elif method == "list_tools":
-            tools = await engine.list_tools(slug)
-            return JSONResponse({
-                "jsonrpc": "2.0", "id": msg_id,
-                "result": {"tools": tools},
-            })
+            if method in ("list_tools", "tools/list"):
+                tools = await engine.list_tools(slug)
+                return _make_response(msg_id, {"tools": tools})
 
-        elif method == "call_tool":
-            name = body.get("params", {}).get("name", "")
-            arguments = body.get("params", {}).get("arguments", {})
-            result = await engine.call_tool(slug, name, arguments)
-            return JSONResponse({
-                "jsonrpc": "2.0", "id": msg_id,
-                "result": result,
-            })
+            if method in ("call_tool", "tools/call"):
+                name = body.get("params", {}).get("name", "")
+                arguments = body.get("params", {}).get("arguments", {})
+                result = await engine.call_tool(slug, name, arguments)
+                return _make_response(msg_id, result)
 
-        else:
-            return JSONResponse({
-                "jsonrpc": "2.0", "id": msg_id,
-                "error": {"code": -32601, "message": f"Method not found: {method}"},
-            })
+            return _make_response(msg_id, error={"code": -32601, "message": f"Method not found: {method}"})
 
-    except ValueError as e:
-        return JSONResponse({
-            "jsonrpc": "2.0", "id": msg_id,
-            "error": {"code": -32602, "message": str(e)},
-        })
-    except PermissionError as e:
-        return JSONResponse({
-            "jsonrpc": "2.0", "id": msg_id,
-            "error": {"code": -32001, "message": str(e)},
-        })
-    except Exception as e:
-        log.exception("Proxy error")
-        return JSONResponse({
-            "jsonrpc": "2.0", "id": msg_id,
-            "error": {"code": -32603, "message": str(e)},
-        })
+        except ValueError as e:
+            return _make_response(msg_id, error={"code": -32602, "message": str(e)})
+        except PermissionError as e:
+            return _make_response(msg_id, error={"code": -32001, "message": str(e)})
+        except Exception as e:
+            log.exception("Proxy error")
+            return _make_response(msg_id, error={"code": -32603, "message": str(e)})
+        finally:
+            engine.close()
+        break

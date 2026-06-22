@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { analyticsApi, type CallDetail, type CallRecord, type CallStats } from "../api/client";
+import { Search, X } from "lucide-react";
+import { analyticsApi, proxiesApi, toolsApi, type CallDetail, type CallRecord, type CallStats, type Proxy, type Tool } from "../api/client";
 
 const EVENT_ICONS: Record<string, string> = {
   request_received: "📥",
@@ -106,11 +107,26 @@ export default function Analytics() {
   const [stats, setStats] = useState<CallStats | null>(null);
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [selectedCall, setSelectedCall] = useState<CallDetail | null>(null);
+  const [proxies, setProxies] = useState<Proxy[]>([]);
+  const [allTools, setAllTools] = useState<Tool[]>([]);
+
+  const [filterProxy, setFilterProxy] = useState("");
+  const [filterTool, setFilterTool] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     analyticsApi.stats().then(setStats).catch(() => null);
     analyticsApi.calls({ limit: 50 }).then(setCalls).catch(() => null);
+    proxiesApi.list().then(setProxies).catch(() => null);
+    toolsApi.list().then(setAllTools).catch(() => null);
   }, []);
+
+  const filtered = calls.filter((c) => {
+    if (filterProxy && !c.trace_id?.includes(filterProxy) && c.proxy_id !== filterProxy) return false;
+    if (filterTool && c.tool_name !== filterTool) return false;
+    if (search && !c.tool_name.toLowerCase().includes(search.toLowerCase()) && !(c.error_message || "").toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <div>
@@ -148,7 +164,29 @@ export default function Analytics() {
       )}
 
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <h3 className="font-semibold px-5 pt-5 pb-2">Recent Calls</h3>
+        <div className="flex items-center justify-between px-5 pt-5 pb-2">
+          <h3 className="font-semibold">Recent Calls</h3>
+          <span className="text-xs text-slate-400">{filtered.length} of {calls.length}</span>
+        </div>
+        <div className="px-5 pb-3 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tools..." className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm" />
+          </div>
+          <select value={filterProxy} onChange={(e) => setFilterProxy(e.target.value)} className="border rounded-lg px-3 py-2 text-sm bg-white min-w-[150px]">
+            <option value="">All Proxies</option>
+            {proxies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select value={filterTool} onChange={(e) => setFilterTool(e.target.value)} className="border rounded-lg px-3 py-2 text-sm bg-white min-w-[150px]">
+            <option value="">All Tools</option>
+            {allTools.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+          </select>
+          {(search || filterProxy || filterTool) && (
+            <button onClick={() => { setSearch(""); setFilterProxy(""); setFilterTool(""); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+              <X size={14} /> Clear
+            </button>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -162,7 +200,7 @@ export default function Analytics() {
               </tr>
             </thead>
             <tbody>
-              {calls.map((c) => (
+              {filtered.map((c) => (
                 <tr
                   key={c.id}
                   className="border-b hover:bg-slate-50 cursor-pointer"
@@ -184,8 +222,8 @@ export default function Analytics() {
                   <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{c.timestamp ? new Date(c.timestamp).toLocaleString() : "—"}</td>
                 </tr>
               ))}
-              {calls.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No tool calls recorded</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">{calls.length === 0 ? "No tool calls recorded" : "No calls match filters."}</td></tr>
               )}
             </tbody>
           </table>

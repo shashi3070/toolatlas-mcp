@@ -14,13 +14,30 @@ from toolatlas_mcp.registry.models import (
     Tool,
     ToolCall,
 )
+from toolatlas_mcp.registry.storage import StorageBackend
 
 
 def _utcnow():
     return datetime.now(timezone.utc)
 
 
-class RegistryRepository:
+def _model_to_dict(model) -> dict:
+    if model is None:
+        return None
+    return {c.key: getattr(model, c.key) for c in model.__table__.columns}
+
+
+def _ensure_str_list(v: Any) -> list[str]:
+    if v is None:
+        return []
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, list):
+        return [str(x) for x in v]
+    return v
+
+
+class RegistryRepository(StorageBackend):
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -29,21 +46,22 @@ class RegistryRepository:
 
     # ---- Servers ----
 
-    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> Server:
+    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> dict:
         server = Server(name=name, transport=transport, command=command, url=url)
         self.db.add(server)
         await self.commit()
-        return server
+        return _model_to_dict(server)
 
-    async def list_servers(self) -> list[Server]:
+    async def list_servers(self) -> list[dict]:
         result = await self.db.execute(select(Server).order_by(Server.name))
-        return list(result.scalars().all())
+        return [_model_to_dict(s) for s in result.scalars().all()]
 
-    async def get_server(self, server_id: str) -> Server | None:
-        return await self.db.get(Server, server_id)
+    async def get_server(self, server_id: str) -> dict | None:
+        s = await self.db.get(Server, server_id)
+        return _model_to_dict(s)
 
-    async def update_server(self, server_id: str, **kwargs) -> Server | None:
-        server = await self.get_server(server_id)
+    async def update_server(self, server_id: str, **kwargs) -> dict | None:
+        server = await self.db.get(Server, server_id)
         if not server:
             return None
         for k, v in kwargs.items():
@@ -51,10 +69,10 @@ class RegistryRepository:
                 setattr(server, k, v)
         server.updated_at = _utcnow()
         await self.commit()
-        return server
+        return _model_to_dict(server)
 
     async def delete_server(self, server_id: str) -> bool:
-        server = await self.get_server(server_id)
+        server = await self.db.get(Server, server_id)
         if not server:
             return False
         await self.db.delete(server)
@@ -63,7 +81,7 @@ class RegistryRepository:
 
     # ---- Tools ----
 
-    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any]) -> Tool:
+    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any]) -> dict:
         result = await self.db.execute(
             select(Tool).where(Tool.server_id == server_id, Tool.name == name)
         )
@@ -87,20 +105,21 @@ class RegistryRepository:
             )
             self.db.add(tool)
         await self.commit()
-        return tool
+        return _model_to_dict(tool)
 
-    async def list_tools(self, server_id: str | None = None) -> list[Tool]:
+    async def list_tools(self, server_id: str | None = None) -> list[dict]:
         stmt = select(Tool).order_by(Tool.server_id, Tool.name)
         if server_id:
             stmt = stmt.where(Tool.server_id == server_id)
         result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        return [_model_to_dict(t) for t in result.scalars().all()]
 
-    async def get_tool(self, tool_id: str) -> Tool | None:
-        return await self.db.get(Tool, tool_id)
+    async def get_tool(self, tool_id: str) -> dict | None:
+        t = await self.db.get(Tool, tool_id)
+        return _model_to_dict(t)
 
-    async def update_tool(self, tool_id: str, **kwargs) -> Tool | None:
-        tool = await self.get_tool(tool_id)
+    async def update_tool(self, tool_id: str, **kwargs) -> dict | None:
+        tool = await self.db.get(Tool, tool_id)
         if not tool:
             return None
         for k, v in kwargs.items():
@@ -108,10 +127,10 @@ class RegistryRepository:
                 setattr(tool, k, v)
         tool.updated_at = _utcnow()
         await self.commit()
-        return tool
+        return _model_to_dict(tool)
 
     async def delete_tool(self, tool_id: str) -> bool:
-        tool = await self.get_tool(tool_id)
+        tool = await self.db.get(Tool, tool_id)
         if not tool:
             return False
         await self.db.delete(tool)
@@ -120,25 +139,26 @@ class RegistryRepository:
 
     # ---- Proxies ----
 
-    async def create_proxy(self, name: str, slug: str, description: str = "") -> Proxy:
+    async def create_proxy(self, name: str, slug: str, description: str = "") -> dict:
         proxy = Proxy(name=name, slug=slug, description=description)
         self.db.add(proxy)
         await self.commit()
-        return proxy
+        return _model_to_dict(proxy)
 
-    async def list_proxies(self) -> list[Proxy]:
+    async def list_proxies(self) -> list[dict]:
         result = await self.db.execute(select(Proxy).order_by(Proxy.name))
-        return list(result.scalars().all())
+        return [_model_to_dict(p) for p in result.scalars().all()]
 
-    async def get_proxy(self, proxy_id: str) -> Proxy | None:
-        return await self.db.get(Proxy, proxy_id)
+    async def get_proxy(self, proxy_id: str) -> dict | None:
+        p = await self.db.get(Proxy, proxy_id)
+        return _model_to_dict(p)
 
-    async def get_proxy_by_slug(self, slug: str) -> Proxy | None:
+    async def get_proxy_by_slug(self, slug: str) -> dict | None:
         result = await self.db.execute(select(Proxy).where(Proxy.slug == slug))
-        return result.scalar_one_or_none()
+        return _model_to_dict(result.scalar_one_or_none())
 
-    async def update_proxy(self, proxy_id: str, **kwargs) -> Proxy | None:
-        proxy = await self.get_proxy(proxy_id)
+    async def update_proxy(self, proxy_id: str, **kwargs) -> dict | None:
+        proxy = await self.db.get(Proxy, proxy_id)
         if not proxy:
             return None
         for k, v in kwargs.items():
@@ -146,10 +166,10 @@ class RegistryRepository:
                 setattr(proxy, k, v)
         proxy.updated_at = _utcnow()
         await self.commit()
-        return proxy
+        return _model_to_dict(proxy)
 
     async def delete_proxy(self, proxy_id: str) -> bool:
-        proxy = await self.get_proxy(proxy_id)
+        proxy = await self.db.get(Proxy, proxy_id)
         if not proxy:
             return False
         await self.db.delete(proxy)
@@ -190,30 +210,36 @@ class RegistryRepository:
         )
         await self.commit()
 
-    async def get_proxy_servers(self, proxy_id: str) -> list[Server]:
+    async def get_proxy_servers(self, proxy_id: str) -> list[dict]:
         result = await self.db.execute(
             select(Server).join(ProxyServer).where(ProxyServer.proxy_id == proxy_id)
         )
-        return list(result.scalars().all())
+        return [_model_to_dict(s) for s in result.scalars().all()]
 
     # ---- Proxy-Tool settings ----
 
-    async def get_tool_setting(self, proxy_id: str, tool_id: str) -> ProxyToolSetting | None:
+    async def get_tool_setting(self, proxy_id: str, tool_id: str) -> dict | None:
         result = await self.db.execute(
             select(ProxyToolSetting).where(
                 ProxyToolSetting.proxy_id == proxy_id,
                 ProxyToolSetting.tool_id == tool_id,
             )
         )
-        return result.scalar_one_or_none()
+        return _model_to_dict(result.scalar_one_or_none())
 
     async def upsert_tool_setting(
         self, proxy_id: str, tool_id: str,
         enabled: bool | None = None,
         custom_description: str | None = None,
         alias: str | None = None,
-    ) -> ProxyToolSetting:
-        setting = await self.get_tool_setting(proxy_id, tool_id)
+    ) -> dict:
+        result = await self.db.execute(
+            select(ProxyToolSetting).where(
+                ProxyToolSetting.proxy_id == proxy_id,
+                ProxyToolSetting.tool_id == tool_id,
+            )
+        )
+        setting = result.scalar_one_or_none()
         if setting:
             if enabled is not None:
                 setting.enabled = enabled
@@ -231,25 +257,26 @@ class RegistryRepository:
             )
             self.db.add(setting)
         await self.commit()
-        return setting
+        return _model_to_dict(setting)
 
     # ---- Glossary ----
 
-    async def create_glossary_term(self, term: str, definition: str = "") -> GlossaryTerm:
+    async def create_glossary_term(self, term: str, definition: str = "") -> dict:
         gt = GlossaryTerm(term=term, definition=definition)
         self.db.add(gt)
         await self.commit()
-        return gt
+        return _model_to_dict(gt)
 
-    async def list_glossary_terms(self) -> list[GlossaryTerm]:
+    async def list_glossary_terms(self) -> list[dict]:
         result = await self.db.execute(select(GlossaryTerm).order_by(GlossaryTerm.term))
-        return list(result.scalars().all())
+        return [_model_to_dict(g) for g in result.scalars().all()]
 
-    async def get_glossary_term(self, term_id: str) -> GlossaryTerm | None:
-        return await self.db.get(GlossaryTerm, term_id)
+    async def get_glossary_term(self, term_id: str) -> dict | None:
+        g = await self.db.get(GlossaryTerm, term_id)
+        return _model_to_dict(g)
 
-    async def update_glossary_term(self, term_id: str, **kwargs) -> GlossaryTerm | None:
-        gt = await self.get_glossary_term(term_id)
+    async def update_glossary_term(self, term_id: str, **kwargs) -> dict | None:
+        gt = await self.db.get(GlossaryTerm, term_id)
         if not gt:
             return None
         for k, v in kwargs.items():
@@ -257,10 +284,10 @@ class RegistryRepository:
                 setattr(gt, k, v)
         gt.updated_at = _utcnow()
         await self.commit()
-        return gt
+        return _model_to_dict(gt)
 
     async def delete_glossary_term(self, term_id: str) -> bool:
-        gt = await self.get_glossary_term(term_id)
+        gt = await self.db.get(GlossaryTerm, term_id)
         if not gt:
             return False
         await self.db.delete(gt)
@@ -269,15 +296,15 @@ class RegistryRepository:
 
     # ---- Domains ----
 
-    async def create_domain(self, name: str, description: str = "") -> Domain:
+    async def create_domain(self, name: str, description: str = "") -> dict:
         domain = Domain(name=name, description=description)
         self.db.add(domain)
         await self.commit()
-        return domain
+        return _model_to_dict(domain)
 
-    async def list_domains(self) -> list[Domain]:
+    async def list_domains(self) -> list[dict]:
         result = await self.db.execute(select(Domain).order_by(Domain.name))
-        return list(result.scalars().all())
+        return [_model_to_dict(d) for d in result.scalars().all()]
 
     # ---- Tool Calls (tracking) ----
 
@@ -295,7 +322,7 @@ class RegistryRepository:
         client_id: str | None = None,
         trace_id: str | None = None,
         events: list | None = None,
-    ) -> ToolCall:
+    ) -> dict:
         call = ToolCall(
             proxy_id=proxy_id,
             tool_id=tool_id,
@@ -312,16 +339,16 @@ class RegistryRepository:
         )
         self.db.add(call)
         await self.commit()
-        return call
+        return _model_to_dict(call)
 
-    async def get_call(self, call_id: str) -> ToolCall | None:
+    async def get_call(self, call_id: str) -> dict | None:
         result = await self.db.execute(select(ToolCall).where(ToolCall.id == call_id))
-        return result.scalar_one_or_none()
+        return _model_to_dict(result.scalar_one_or_none())
 
     async def list_calls(
         self, proxy_id: str | None = None, tool_id: str | None = None,
         limit: int = 100, offset: int = 0,
-    ) -> list[ToolCall]:
+    ) -> list[dict]:
         stmt = select(ToolCall).order_by(ToolCall.timestamp.desc())
         if proxy_id:
             stmt = stmt.where(ToolCall.proxy_id == proxy_id)
@@ -329,7 +356,7 @@ class RegistryRepository:
             stmt = stmt.where(ToolCall.tool_id == tool_id)
         stmt = stmt.offset(offset).limit(limit)
         result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        return [_model_to_dict(c) for c in result.scalars().all()]
 
     async def get_call_stats(self) -> dict[str, Any]:
         from sqlalchemy import func

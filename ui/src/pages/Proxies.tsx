@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Search, X } from "lucide-react";
 import { proxiesApi, type Proxy } from "../api/client";
 
 export default function Proxies() {
@@ -9,10 +9,16 @@ export default function Proxies() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
+  const [search, setSearch] = useState("");
 
   const load = () => proxiesApi.list().then(setProxies);
 
   useEffect(() => { load(); }, []);
+
+  const filtered = proxies.filter((p) => {
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.slug.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   const save = async () => {
     await proxiesApi.create({ name, slug, description });
@@ -34,7 +40,7 @@ export default function Proxies() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Proxies</h2>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800">
+        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
           <Plus size={16} /> Create Proxy
         </button>
       </div>
@@ -57,14 +63,27 @@ export default function Proxies() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={save} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800">Create</button>
+            <button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">Create</button>
             <button onClick={() => setShowForm(false)} className="border px-4 py-2 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
           </div>
         </div>
       )}
 
+      <div className="bg-white rounded-xl shadow-sm border p-3 mb-4 flex items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search proxies..." className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm" />
+        </div>
+        {search && (
+          <button onClick={() => setSearch("")} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+            <X size={14} /> Clear
+          </button>
+        )}
+        <span className="text-xs text-slate-400 ml-auto">{filtered.length} of {proxies.length}</span>
+      </div>
+
       <div className="grid gap-4">
-        {proxies.map((p) => (
+        {filtered.map((p) => (
           <div key={p.id} className="bg-white rounded-xl shadow-sm border p-5 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
@@ -81,8 +100,8 @@ export default function Proxies() {
             </div>
           </div>
         ))}
-        {proxies.length === 0 && (
-          <p className="text-center text-slate-400 py-8">No proxies created yet</p>
+        {filtered.length === 0 && (
+          <p className="text-center text-slate-400 py-8">{proxies.length === 0 ? "No proxies created yet" : "No proxies match filters."}</p>
         )}
       </div>
     </div>

@@ -1,17 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from toolatlas_mcp.api.schemas import CallDetailResponse, CallRecordResponse, CallStatsResponse
-from toolatlas_mcp.db import get_db
-from toolatlas_mcp.registry.repository import RegistryRepository
+from toolatlas_mcp.db import get_storage
+from toolatlas_mcp.registry.storage import StorageBackend
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
 @router.get("/stats")
-async def get_stats(db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
-    stats = await repo.get_call_stats()
+async def get_stats(storage: StorageBackend = Depends(get_storage)):
+    stats = await storage.get_call_stats()
     return CallStatsResponse(**stats)
 
 
@@ -21,22 +19,20 @@ async def list_calls(
     tool_id: str | None = Query(None),
     limit: int = Query(100),
     offset: int = Query(0),
-    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
 ):
-    repo = RegistryRepository(db)
-    calls = await repo.list_calls(
+    calls = await storage.list_calls(
         proxy_id=proxy_id,
         tool_id=tool_id,
         limit=limit,
         offset=offset,
     )
-    return [CallRecordResponse.model_validate(c) for c in calls]
+    return [CallRecordResponse(**c) for c in calls]
 
 
 @router.get("/calls/{call_id}")
-async def get_call_detail(call_id: str, db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
-    call = await repo.get_call(call_id)
+async def get_call_detail(call_id: str, storage: StorageBackend = Depends(get_storage)):
+    call = await storage.get_call(call_id)
     if not call:
         raise HTTPException(404, "Call not found")
-    return CallDetailResponse.model_validate(call)
+    return CallDetailResponse(**call)

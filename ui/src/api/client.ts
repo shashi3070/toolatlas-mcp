@@ -84,6 +84,13 @@ export type CallStats = {
   top_tools: { name: string; count: number }[];
 };
 
+export type ToolTestResponse = {
+  name: string;
+  result?: Record<string, unknown>;
+  error?: string;
+  duration_ms: number;
+};
+
 export const serversApi = {
   list: () => api.get<Server[]>("/servers").then((r) => r.data),
   get: (id: string) => api.get<Server>(`/servers/${id}`).then((r) => r.data),
@@ -103,6 +110,8 @@ export const toolsApi = {
   get: (id: string) => api.get<Tool>(`/tools/${id}`).then((r) => r.data),
   update: (id: string, data: Partial<Tool>) =>
     api.patch<Tool>(`/tools/${id}`, data).then((r) => r.data),
+  test: (id: string, data: { arguments?: Record<string, unknown> }) =>
+    api.post<ToolTestResponse>(`/tools/${id}/test`, data).then((r) => r.data),
 };
 
 export const proxiesApi = {

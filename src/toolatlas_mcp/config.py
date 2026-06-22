@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from toolatlas_mcp.registry.storage import get_data_dir
 
 
 class Settings(BaseSettings):
@@ -6,7 +7,8 @@ class Settings(BaseSettings):
 
     host: str = "127.0.0.1"
     port: int = 8080
-    database_url: str = "sqlite+aiosqlite:///toolatlas.db"
+    database_url: str = f"sqlite+aiosqlite:///{get_data_dir() / 'toolatlas.db'}"
+    storage_type: str = "sqlite"
     log_level: str = "INFO"
     ui_dir: str = ""
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Wifi, RefreshCw, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Wifi, RefreshCw, CheckCircle, XCircle, Search, X } from "lucide-react";
 import { serversApi, type Server, type Tool } from "../api/client";
 
 export default function Servers() {
@@ -18,9 +18,18 @@ export default function Servers() {
   const [discoveringId, setDiscoveringId] = useState<string | null>(null);
   const [discoveredTools, setDiscoveredTools] = useState<Record<string, Tool[]>>({});
 
+  const [search, setSearch] = useState("");
+  const [filterTransport, setFilterTransport] = useState("");
+
   const load = () => serversApi.list().then(setServers);
 
   useEffect(() => { load(); }, []);
+
+  const filtered = servers.filter((s) => {
+    if (filterTransport && s.transport !== filterTransport) return false;
+    if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   const openNew = () => {
     setEditing(null);
@@ -105,7 +114,7 @@ export default function Servers() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Servers</h2>
-        <button onClick={openNew} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-800">
+        <button onClick={openNew} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
           <Plus size={16} /> Add Server
         </button>
       </div>
@@ -155,7 +164,7 @@ export default function Servers() {
               disabled={!canSave || saving}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${
                 canSave
-                  ? "bg-slate-900 text-white hover:bg-slate-800"
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
                   : "bg-slate-200 text-slate-400 cursor-not-allowed"
               }`}
             >
@@ -198,8 +207,27 @@ export default function Servers() {
         </div>
       )}
 
+      <div className="bg-white rounded-xl shadow-sm border p-3 mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search servers..." className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm" />
+        </div>
+        <select value={filterTransport} onChange={(e) => setFilterTransport(e.target.value)} className="border rounded-lg px-3 py-2 text-sm bg-white min-w-[130px]">
+          <option value="">All Transports</option>
+          <option value="sse">SSE</option>
+          <option value="streamable-http">Streamable HTTP</option>
+          <option value="stdio">STDIO</option>
+        </select>
+        {(search || filterTransport) && (
+          <button onClick={() => { setSearch(""); setFilterTransport(""); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+            <X size={14} /> Clear
+          </button>
+        )}
+        <span className="text-xs text-slate-400 ml-auto">{filtered.length} of {servers.length}</span>
+      </div>
+
       <div className="space-y-4">
-        {servers.map((s) => (
+        {filtered.map((s) => (
           <div key={s.id} className="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -254,8 +282,8 @@ export default function Servers() {
           </div>
         ))}
 
-        {servers.length === 0 && (
-          <p className="text-center text-slate-400 py-8">No servers registered. Click "Add Server" to begin.</p>
+        {filtered.length === 0 && (
+          <p className="text-center text-slate-400 py-8">{servers.length === 0 ? 'No servers registered. Click "Add Server" to begin.' : "No servers match filters."}</p>
         )}
       </div>
     </div>

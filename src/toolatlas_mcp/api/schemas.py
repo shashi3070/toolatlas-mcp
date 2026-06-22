@@ -175,3 +175,14 @@ class ProxyStatsResponse(BaseModel):
     successful_calls: int
     avg_latency_ms: float
     recent_calls: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ToolTestRequest(BaseModel):
+    arguments: dict[str, Any] = {}
+
+
+class ToolTestResponse(BaseModel):
+    name: str
+    result: dict | None = None
+    error: str | None = None
+    duration_ms: float

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from toolatlas_mcp.api.schemas import (
     DomainCreate,
@@ -8,69 +7,62 @@ from toolatlas_mcp.api.schemas import (
     GlossaryTermResponse,
     GlossaryTermUpdate,
 )
-from toolatlas_mcp.db import get_db
-from toolatlas_mcp.registry.repository import RegistryRepository
+from toolatlas_mcp.db import get_storage
+from toolatlas_mcp.registry.storage import StorageBackend
 
 router = APIRouter(prefix="/api/glossary", tags=["glossary"])
 
 
 @router.get("/terms")
-async def list_terms(db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
-    terms = await repo.list_glossary_terms()
-    return [GlossaryTermResponse.model_validate(t) for t in terms]
+async def list_terms(storage: StorageBackend = Depends(get_storage)):
+    terms = await storage.list_glossary_terms()
+    return [GlossaryTermResponse(**t) for t in terms]
 
 
 @router.post("/terms", status_code=201)
-async def create_term(body: GlossaryTermCreate, db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
-    term = await repo.create_glossary_term(
+async def create_term(body: GlossaryTermCreate, storage: StorageBackend = Depends(get_storage)):
+    term = await storage.create_glossary_term(
         term=body.term,
         definition=body.definition,
     )
-    return GlossaryTermResponse.model_validate(term)
+    return GlossaryTermResponse(**term)
 
 
 @router.get("/terms/{term_id}")
-async def get_term(term_id: str, db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
-    term = await repo.get_glossary_term(term_id)
+async def get_term(term_id: str, storage: StorageBackend = Depends(get_storage)):
+    term = await storage.get_glossary_term(term_id)
     if not term:
         raise HTTPException(404, "Glossary term not found")
-    return GlossaryTermResponse.model_validate(term)
+    return GlossaryTermResponse(**term)
 
 
 @router.patch("/terms/{term_id}")
-async def update_term(term_id: str, body: GlossaryTermUpdate, db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
+async def update_term(term_id: str, body: GlossaryTermUpdate, storage: StorageBackend = Depends(get_storage)):
     kwargs = body.model_dump(exclude_unset=True)
-    term = await repo.update_glossary_term(term_id, **kwargs)
+    term = await storage.update_glossary_term(term_id, **kwargs)
     if not term:
         raise HTTPException(404, "Glossary term not found")
-    return GlossaryTermResponse.model_validate(term)
+    return GlossaryTermResponse(**term)
 
 
 @router.delete("/terms/{term_id}")
-async def delete_term(term_id: str, db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
-    deleted = await repo.delete_glossary_term(term_id)
+async def delete_term(term_id: str, storage: StorageBackend = Depends(get_storage)):
+    deleted = await storage.delete_glossary_term(term_id)
     if not deleted:
         raise HTTPException(404, "Glossary term not found")
     return {"ok": True}
 
 
 @router.get("/domains")
-async def list_domains(db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
-    domains = await repo.list_domains()
-    return [DomainResponse.model_validate(d) for d in domains]
+async def list_domains(storage: StorageBackend = Depends(get_storage)):
+    domains = await storage.list_domains()
+    return [DomainResponse(**d) for d in domains]
 
 
 @router.post("/domains", status_code=201)
-async def create_domain(body: DomainCreate, db: AsyncSession = Depends(get_db)):
-    repo = RegistryRepository(db)
-    domain = await repo.create_domain(
+async def create_domain(body: DomainCreate, storage: StorageBackend = Depends(get_storage)):
+    domain = await storage.create_domain(
         name=body.name,
         description=body.description,
     )
-    return DomainResponse.model_validate(domain)
+    return DomainResponse(**domain)

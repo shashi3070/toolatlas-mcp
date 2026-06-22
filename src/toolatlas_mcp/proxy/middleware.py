@@ -4,14 +4,12 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
 from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from toolatlas_mcp.registry.repository import RegistryRepository
+from toolatlas_mcp.registry.storage import StorageBackend
 
 
 class ProxyMiddleware:
-    def __init__(self, db: AsyncSession):
-        self.repo = RegistryRepository(db)
+    def __init__(self, storage: StorageBackend):
+        self.storage = storage
 
     @asynccontextmanager
     async def track(
@@ -54,7 +52,7 @@ class ProxyMiddleware:
             add_event("call_completed", f"Tool call completed in {duration_ms:.0f}ms", {
                 "duration_ms": duration_ms, "success": success,
             })
-            await self.repo.record_call(
+            await self.storage.record_call(
                 tool_name=tool_name,
                 proxy_id=proxy_id,
                 tool_id=tool_id,

@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Server } from "lucide-react";
+import { useParams, Link } from "react-router-dom";
+import { ArrowLeft, Server, Play, CheckCircle, XCircle, Clock } from "lucide-react";
 import { toolsApi, glossaryApi, type Tool, type Domain, type GlossaryTerm } from "../api/client";
 
 export default function ToolDetail() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
 
   const [tool, setTool] = useState<Tool | null>(null);
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -18,6 +17,10 @@ export default function ToolDetail() {
   const [domainsSelected, setDomainsSelected] = useState<string[]>([]);
   const [tags, setTags] = useState("");
   const [glossaryTermId, setGlossaryTermId] = useState("");
+
+  const [testArgs, setTestArgs] = useState<Record<string, unknown>>({});
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ name: string; result?: Record<string, unknown>; error?: string; duration_ms: number } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -33,6 +36,16 @@ export default function ToolDetail() {
       setDomainsSelected(t.domain || []);
       setTags((t.tags || []).join(", "));
       setGlossaryTermId(t.glossary_term_id || "");
+      const initial: Record<string, unknown> = {};
+      if (t.input_schema?.properties) {
+        for (const [key, prop] of Object.entries(t.input_schema.properties as Record<string, any>)) {
+          if (prop.default !== undefined) initial[key] = prop.default;
+          else if (prop.type === "boolean") initial[key] = false;
+          else if (prop.type === "number" || prop.type === "integer") initial[key] = 0;
+          else initial[key] = "";
+        }
+      }
+      setTestArgs(initial);
       setLoading(false);
     });
   }, [id]);
@@ -57,6 +70,24 @@ export default function ToolDetail() {
     }
   };
 
+  const handleTest = async () => {
+    if (!tool) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await toolsApi.test(tool.id, { arguments: testArgs });
+      setTestResult(result);
+    } catch (e) {
+      setTestResult({
+        name: tool.name,
+        error: e instanceof Error ? e.message : "Unknown error",
+        duration_ms: 0,
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   if (loading) {
     return <div className="text-slate-400 text-center py-12">Loading...</div>;
   }
@@ -75,6 +106,10 @@ export default function ToolDetail() {
   if (selectedTerm) enrichmentLines.push(`Glossary: ${selectedTerm.definition || selectedTerm.term}`);
   const clientPreview = (description || tool.original_description) +
     (enrichmentLines.length ? "\n" + enrichmentLines.join("\n") : "");
+
+  const schema = tool.input_schema as Record<string, any>;
+  const properties = schema?.properties as Record<string, any> | undefined;
+  const required = (schema?.required as string[]) || [];
 
   return (
     <div>
@@ -134,6 +169,134 @@ export default function ToolDetail() {
   enabled: tool.enabled,
 }, null, 2)}
             </pre>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border p-5 border-indigo-200">
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 bg-indigo-500 rounded-full" />
+              Test Tool
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Pass arguments to call the tool on its MCP server and see the result
+            </p>
+
+            {properties ? (
+              <div className="space-y-3 mb-4">
+                {Object.entries(properties).map(([key, prop]) => {
+                  const p = prop as Record<string, any>;
+                  const isReq = required.includes(key);
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {key} {isReq && <span className="text-red-500">*</span>}
+                        {p.type && <span className="text-xs text-slate-400 ml-1">({p.type})</span>}
+                      </label>
+                      {p.type === "boolean" ? (
+                        <select
+                          value={String(testArgs[key] ?? false)}
+                          onChange={(e) => setTestArgs({ ...testArgs, [key]: e.target.value === "true" })}
+                          className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                        >
+                          <option value="false">false</option>
+                          <option value="true">true</option>
+                        </select>
+                      ) : p.enum ? (
+                        <select
+                          value={String(testArgs[key] ?? "")}
+                          onChange={(e) => setTestArgs({ ...testArgs, [key]: e.target.value })}
+                          className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                        >
+                          <option value="">-- select --</option>
+                          {p.enum.map((opt: string) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : p.type === "number" || p.type === "integer" ? (
+                        <input
+                          type="number"
+                          value={String(testArgs[key] ?? 0)}
+                          onChange={(e) => setTestArgs({ ...testArgs, [key]: p.type === "integer" ? parseInt(e.target.value) : parseFloat(e.target.value) })}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                        />
+                      ) : p.type === "array" ? (
+                        <input
+                          value={String(testArgs[key] ?? "")}
+                          onChange={(e) => {
+                            try { setTestArgs({ ...testArgs, [key]: JSON.parse(e.target.value) }); }
+                            catch { setTestArgs({ ...testArgs, [key]: e.target.value.split(",").map((s) => s.trim()) }); }
+                          }}
+                          placeholder='["item1", "item2"] or comma-separated'
+                          className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                      ) : p.type === "object" ? (
+                        <textarea
+                          value={typeof testArgs[key] === "string" ? String(testArgs[key]) : JSON.stringify(testArgs[key] ?? {}, null, 2)}
+                          onChange={(e) => {
+                            try { setTestArgs({ ...testArgs, [key]: JSON.parse(e.target.value) }); }
+                            catch { setTestArgs({ ...testArgs, [key]: e.target.value }); }
+                          }}
+                          placeholder='{"key": "value"}'
+                          className="w-full border rounded-lg px-3 py-2 text-sm font-mono min-h-[60px]"
+                        />
+                      ) : (
+                        <input
+                          value={String(testArgs[key] ?? "")}
+                          onChange={(e) => setTestArgs({ ...testArgs, [key]: e.target.value })}
+                          placeholder={p.description || key}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                        />
+                      )}
+                      {p.description && <p className="text-xs text-slate-400 mt-0.5">{p.description}</p>}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Arguments (JSON)</label>
+                <textarea
+                  value={Object.keys(testArgs).length ? JSON.stringify(testArgs, null, 2) : ""}
+                  onChange={(e) => {
+                    try { setTestArgs(JSON.parse(e.target.value)); }
+                    catch { setTestArgs(e.target.value ? { _raw: e.target.value } : {}); }
+                  }}
+                  placeholder='{"key": "value"}'
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono min-h-[80px]"
+                />
+              </div>
+            )}
+
+            <button
+              onClick={handleTest}
+              disabled={testing}
+              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+            >
+              <Play size={16} />
+              {testing ? "Running..." : "Run Test"}
+            </button>
+
+            {testResult && (
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock size={14} className="text-slate-400" />
+                  <span className="text-slate-500">{testResult.duration_ms.toFixed(1)}ms</span>
+                  {testResult.error ? (
+                    <span className="flex items-center gap-1 text-red-600"><XCircle size={14} /> Failed</span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-green-600"><CheckCircle size={14} /> Success</span>
+                  )}
+                </div>
+                {testResult.error ? (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    {testResult.error}
+                  </div>
+                ) : (
+                  <pre className="bg-green-50 border border-green-200 text-slate-800 text-xs rounded-lg p-3 overflow-x-auto max-h-60">
+                    {JSON.stringify(testResult.result, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -206,7 +369,7 @@ export default function ToolDetail() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full bg-slate-900 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? "Saving..." : saved ? "Saved ✓" : "Save Changes"}
           </button>
