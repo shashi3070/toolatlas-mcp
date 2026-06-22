@@ -14,7 +14,6 @@ export default function ToolDetail() {
   const [saved, setSaved] = useState(false);
 
   const [description, setDescription] = useState("");
-  const [domainsSelected, setDomainsSelected] = useState<string[]>([]);
   const [tags, setTags] = useState("");
   const [glossaryTermIds, setGlossaryTermIds] = useState<string[]>([]);
   const [glossaryDomainFilter, setGlossaryDomainFilter] = useState("");
@@ -34,7 +33,6 @@ export default function ToolDetail() {
       setDomains(d);
       setTerms(terms);
       setDescription(t.description || "");
-      setDomainsSelected(t.domain || []);
       setTags((t.tags || []).join(", "));
       setGlossaryTermIds(t.glossary_term_ids || []);
       const initial: Record<string, unknown> = {};
@@ -54,10 +52,15 @@ export default function ToolDetail() {
   const handleSave = async () => {
     if (!tool) return;
     setSaving(true);
+    const selectedTerms = terms.filter((t) => glossaryTermIds.includes(t.id));
+    const domainNames = [...new Set(selectedTerms.map((t) => {
+      const d = domains.find((d) => d.id === t.domain_id);
+      return d ? d.name : "";
+    }).filter(Boolean))];
     try {
       const updated = await toolsApi.update(tool.id, {
         description,
-        domain: domainsSelected.length ? domainsSelected : undefined,
+        domain: domainNames.length ? domainNames : undefined,
         tags: tags ? tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         glossary_term_ids: glossaryTermIds.length ? glossaryTermIds : undefined,
       });
@@ -103,7 +106,11 @@ export default function ToolDetail() {
   const enrichmentLines: string[] = [];
   const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
   if (tagList.length) enrichmentLines.push(`Tags: ${tagList.join(", ")}`);
-  if (domainsSelected.length) enrichmentLines.push(`Domain: ${domainsSelected.join(", ")}`);
+  const domainNames = [...new Set(selectedTerms.map((t) => {
+    const d = domains.find((d) => d.id === t.domain_id);
+    return d ? d.name : "";
+  }).filter(Boolean))];
+  if (domainNames.length) enrichmentLines.push(`Domain: ${domainNames.join(", ")}`);
   for (const st of selectedTerms) {
     enrichmentLines.push(`Glossary: ${st.definition || st.term}`);
   }
@@ -306,32 +313,6 @@ export default function ToolDetail() {
             <h3 className="font-semibold mb-4">Settings</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Domain</label>
-                <div className="space-y-1.5 mt-1 max-h-40 overflow-y-auto border rounded-lg p-2">
-                  {domains.length === 0 && (
-                    <p className="text-xs text-slate-400">No domains configured</p>
-                  )}
-                  {domains.map((d) => (
-                    <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer hover:text-slate-900">
-                      <input
-                        type="checkbox"
-                        checked={domainsSelected.includes(d.name)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setDomainsSelected([...domainsSelected, d.name]);
-                          } else {
-                            setDomainsSelected(domainsSelected.filter((n) => n !== d.name));
-                          }
-                        }}
-                        className="rounded border-slate-300"
-                      />
-                      {d.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tags (comma separated)</label>
                 <input
                   value={tags}
@@ -342,7 +323,7 @@ export default function ToolDetail() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Glossary Terms (multi-select)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Select Domain &amp; Glossary Terms</label>
                 <div className="mt-1 space-y-2">
                   <select
                     value={glossaryDomainFilter}
