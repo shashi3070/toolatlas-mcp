@@ -12,7 +12,8 @@ ToolAtlas helps organizations **discover, govern, understand, and optimize** MCP
 
 ```bash
 pip install toolatlas-mcp
-toolatlas start
+toolatlas start                  # defaults: port 8081, json storage
+toolatlas start --port 9000 --storage sqlite --data-dir ./data
 ```
 
 ---
@@ -72,7 +73,7 @@ Every registry tool can be enriched with business context. The enriched descript
 | **Custom Description** | Override the original server description | `Search for code in GitHub` |
 | **Tags** | Add searchable labels | `Tags: git, code, search` |
 | **Domain** | Categorize by business area | `Domain: development` |
-| **Glossary Term** | Link to a business concept with definition | `Glossary: Search across all code repositories` |
+| **Glossary Terms** | Link one or more business concepts with definitions | `Glossary: Search across all code repositories` |
 
 Client sees the full enriched description automatically:
 
@@ -94,6 +95,12 @@ Full SPA for managing everything visually — servers, proxies, tool settings, g
 
 ### 🧪 Tool Testing Console
 Test any tool directly from the UI — pass arguments via a dynamic form (auto-generated from the tool's input schema) and see the result in real time with duration tracking.
+
+### 📂 Glossary with Domain Hierarchy
+Organize glossary terms under domains (created first, then terms under them). Terms are grouped by domain in the UI. Assign **multiple** glossary terms to a single tool. Edit/delete domains and terms inline. Bulk import entire glossaries via JSON/CSV file upload with automatic domain creation.
+
+### 🔍 Filters & Search
+Every management page (Tools, Servers, Proxies, Glossary, Analytics) includes search bars and filter dropdowns for quick navigation.
 
 ### 🔮 Planned Features
 | Feature | Status |
@@ -179,12 +186,12 @@ toolatlas start
 
 Output:
 ```
-ToolAtlas starting on 127.0.0.1:8080
-  Web UI: http://127.0.0.1:8080
-  API:    http://127.0.0.1:8080/api/health
+ToolAtlas starting on 127.0.0.1:8081
+  Web UI: http://127.0.0.1:8081
+  API:    http://127.0.0.1:8081/api/health
 ```
 
-Open **http://localhost:8080** in your browser to see the dashboard.
+Open **http://localhost:8081** in your browser to see the dashboard.
 
 ### 2. Add an MCP Server
 
@@ -261,9 +268,9 @@ In the **Tool detail page**, you can add:
 
 - **Tags** — comma-separated labels like `git, code, search`
 - **Domain** — categorize the tool (e.g., "development", "security")
-- **Glossary Term** — link to a business term with definition
+- **Glossary Terms** — link one or more business terms with definitions (multi-select, grouped by domain)
 
-First create glossary terms and domains under the **Glossary** page, then assign them to tools.
+First create glossary **domains** and **terms** under the **Glossary** page, then assign them to tools from the tool detail page.
 
 ### 7. Connect Your AI Client
 
@@ -276,7 +283,7 @@ Configure your MCP client (Claude Desktop, Cursor, custom agent) to point to Too
   "mcpServers": {
     "dev": {
       "type": "sse",
-      "url": "http://localhost:8080/proxy/dev/sse"
+      "url": "http://localhost:8081/proxy/dev/sse"
     }
   }
 }
@@ -294,7 +301,7 @@ For scripting or testing without an MCP client library, use the message endpoint
 import httpx, uuid
 
 session_id = str(uuid.uuid4())
-proxy_url = f"http://localhost:8080/proxy/dev/message/{session_id}"
+proxy_url = f"http://localhost:8081/proxy/dev/message/{session_id}"
 
 # Initialize
 httpx.post(proxy_url, json={
@@ -332,11 +339,13 @@ Go to the **Analytics** page in the web UI to see:
 
 | Command | Description |
 |---------|-------------|
-| `toolatlas start` | Start the ToolAtlas server (interactive prompts for storage setup) |
+| `toolatlas start` | Start the ToolAtlas server (defaults: port 8081, json storage) |
 | `toolatlas start --port 9000 --host 0.0.0.0` | Start on a different address |
+| `toolatlas start --storage sqlite` | Use SQLite storage backend |
+| `toolatlas start --data-dir ./my-data` | Custom data directory |
 | `toolatlas start --reload` | Start with auto-reload (development) |
 
-The CLI will prompt for data directory and storage type on first run. Set `TOOLATLAS_DATA_DIR` and `TOOLATLAS_STORAGE_TYPE` environment variables to skip prompts for non-interactive use.
+All flags: `--port`, `--host`, `--storage` (json/sqlite), `--data-dir`, `--reload`. Environment variables are still supported with `TOOLATLAS_` prefix and take precedence over defaults.
 
 ---
 
@@ -346,8 +355,8 @@ ToolAtlas supports two storage backends:
 
 | Backend | Type | Best for |
 |---------|------|----------|
-| **SQLite** (default) | `sqlite` | Production, multi-user, analytics-heavy workloads |
-| **JSON File** | `json` | Development, single-user, portable setups, git-versioned data |
+| **JSON File** (default) | `json` | Development, single-user, portable setups, git-versioned data |
+| **SQLite** | `sqlite` | Production, multi-user, analytics-heavy workloads |
 
 The `data.json` file is saved to the same data directory as the SQLite database.
 
@@ -358,9 +367,9 @@ Set via environment variables with `TOOLATLAS_` prefix:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TOOLATLAS_HOST` | `127.0.0.1` | Bind address |
-| `TOOLATLAS_PORT` | `8080` | HTTP port (auto-increments if in use) |
-| `TOOLATLAS_DATABASE_URL` | `sqlite+aiosqlite:///<data_dir>/toolatlas.db` | Database connection |
-| `TOOLATLAS_STORAGE_TYPE` | `sqlite` | Storage backend (`sqlite` or `json`) |
+| `TOOLATLAS_PORT` | `8081` | HTTP port (auto-increments if in use) |
+| `TOOLATLAS_DATABASE_URL` | `sqlite+aiosqlite:///<data_dir>/toolatlas.db` | Database connection (only for `sqlite` backend) |
+| `TOOLATLAS_STORAGE_TYPE` | `json` | Storage backend (`json` or `sqlite`) |
 | `TOOLATLAS_DATA_DIR` | `~/.toolatlas` (Unix) / `%APPDATA%\ToolAtlas` (Win) | Data directory for databases and config |
 | `TOOLATLAS_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
 
@@ -392,7 +401,7 @@ TOOLATLAS_DATA_DIR=/custom/path TOOLATLAS_STORAGE_TYPE=json toolatlas start
 import httpx, uuid
 
 session_id = str(uuid.uuid4())
-base = f"http://localhost:8080/proxy/dev/message/{session_id}"
+base = f"http://localhost:8081/proxy/dev/message/{session_id}"
 
 # Initialize (required before any other call)
 httpx.post(base, json={
@@ -422,21 +431,21 @@ print(result)
 SESSION_ID=$(uuidgen)
 
 # Initialize
-curl -s -X POST "http://localhost:8080/proxy/dev/message/$SESSION_ID" \
+curl -s -X POST "http://localhost:8081/proxy/dev/message/$SESSION_ID" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 
-curl -s -X POST "http://localhost:8080/proxy/dev/message/$SESSION_ID" \
+curl -s -X POST "http://localhost:8081/proxy/dev/message/$SESSION_ID" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 
 # List tools
-curl -s -X POST "http://localhost:8080/proxy/dev/message/$SESSION_ID" \
+curl -s -X POST "http://localhost:8081/proxy/dev/message/$SESSION_ID" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"list_tools"}'
 
 # Call a tool
-curl -s -X POST "http://localhost:8080/proxy/dev/message/$SESSION_ID" \
+curl -s -X POST "http://localhost:8081/proxy/dev/message/$SESSION_ID" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"search_code","arguments":{"query":"auth"}}}'
 ```
