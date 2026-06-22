@@ -15,10 +15,12 @@ log = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
+    base_path = settings.base_path
     app = FastAPI(
         title="ToolAtlas-MCP",
         version=__version__,
         description="ToolAtlas — Discover, Govern, and Optimize MCP Tools",
+        root_path=base_path,
     )
 
     app.add_middleware(

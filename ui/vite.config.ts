@@ -5,7 +5,7 @@ import { resolve } from "path";
 
 export default defineConfig({
   plugins: [react()],
-  base: "./",
+  base: process.env.VITE_BASE_URL || "./",
   build: {
     outDir: resolve(__dirname, "../src/toolatlas_mcp/ui/dist"),
     emptyOutDir: true,
@@ -13,8 +13,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://127.0.0.1:8080",
-      "/proxy": "http://127.0.0.1:8080",
+      "/api": "http://127.0.0.1:8081",
+      "/proxy": "http://127.0.0.1:8081",
     },
   },
 });

@@ -3,7 +3,6 @@ import os
 import socket
 from pathlib import Path
 
-import click
 import typer
 import uvicorn
 from rich.console import Console
@@ -22,30 +21,18 @@ def _port_file() -> Path:
     return get_data_dir() / "port"
 
 
-def _read_last_port() -> int | None:
-    pf = _port_file()
-    if pf.exists():
-        try:
-            return int(pf.read_text().strip())
-        except (ValueError, OSError):
-            pass
-    return None
-
-
 def _write_last_port(port: int):
     _port_file().parent.mkdir(parents=True, exist_ok=True)
     _port_file().write_text(str(port))
 
 
 def _find_free_port(host: str, preferred: int) -> int:
-    last = _read_last_port()
-    start = last + 1 if last and last >= preferred else preferred
-    for port in range(start, start + 200):
+    for port in range(preferred, preferred + 200):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if s.connect_ex((host, port)) != 0:
                 _write_last_port(port)
                 return port
-    raise RuntimeError(f"No free port found in range {start}-{start + 199}")
+    raise RuntimeError(f"No free port found in range {preferred}-{preferred + 199}")
 
 
 @app.command()

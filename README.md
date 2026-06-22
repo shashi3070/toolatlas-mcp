@@ -372,6 +372,7 @@ Set via environment variables with `TOOLATLAS_` prefix:
 | `TOOLATLAS_STORAGE_TYPE` | `json` | Storage backend (`json` or `sqlite`) |
 | `TOOLATLAS_DATA_DIR` | `~/.toolatlas` (Unix) / `%APPDATA%\ToolAtlas` (Win) | Data directory for databases and config |
 | `TOOLATLAS_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
+| `TOOLATLAS_BASE_PATH` | `""` | URL prefix when deployed behind a reverse proxy (e.g. `/toolatlas`) |
 
 When starting interactively, you'll be prompted for the data directory and storage type if the environment variables aren't set. The CLI automatically scans for a free port (8080→8280) if the default port is occupied.
 
@@ -390,6 +391,42 @@ To use non-interactive mode (no prompts):
 ```bash
 TOOLATLAS_DATA_DIR=/custom/path TOOLATLAS_STORAGE_TYPE=json toolatlas start
 ```
+
+## Subpath Deployment
+
+To deploy ToolAtlas under a URL prefix (e.g. `https://xyz.com/toolatlas/`) behind a reverse proxy like Nginx:
+
+1. **Set the base path:**
+   ```bash
+   export TOOLATLAS_BASE_PATH=/toolatlas
+   ```
+
+2. **Rebuild the React UI with the subpath:**
+   ```bash
+   cd ui
+   VITE_BASE_URL=/toolatlas/ VITE_BASE_PATH=/toolatlas npm run build
+   ```
+
+3. **Configure Nginx** to strip the `/toolatlas` prefix and proxy to ToolAtlas:
+   ```nginx
+   location /toolatlas/ {
+       proxy_pass http://127.0.0.1:8081/;
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection "upgrade";
+       proxy_buffering off;
+       proxy_read_timeout 86400s;
+   }
+   ```
+
+The trailing slash in `proxy_pass` strips `/toolatlas` before forwarding, so ToolAtlas receives requests at `/api/...`, `/proxy/...` as usual. The `base_path` setting only affects URL generation (SSE `message_url`, OpenAPI docs).
+
+4. **MCP clients** connect to the full path:
+   ```json
+   { "url": "https://xyz.com/toolatlas/proxy/dev/sse" }
+   ```
+
+See [docs/deploy-under-subpath.md](docs/deploy-under-subpath.md) for full details.
 
 ---
 

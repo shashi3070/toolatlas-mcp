@@ -39,7 +39,8 @@ async def proxy_sse(slug: str, request: Request):
     _sessions[session_id] = {"slug": slug}
 
     async def event_generator():
-        message_url = f"/proxy/{slug}/message/{session_id}"
+        base = request.app.root_path or ""
+        message_url = f"{base}/proxy/{slug}/message/{session_id}"
         yield {"event": "endpoint", "data": message_url}
 
         try:
