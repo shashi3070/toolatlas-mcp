@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from toolatlas_mcp.api.schemas import (
+    BulkImportRequest,
+    BulkImportResponse,
     DomainCreate,
     DomainResponse,
+    DomainUpdate,
     GlossaryTermCreate,
     GlossaryTermResponse,
     GlossaryTermUpdate,
@@ -70,3 +73,26 @@ async def create_domain(body: DomainCreate, storage: StorageBackend = Depends(ge
         description=body.description,
     )
     return DomainResponse(**domain)
+
+
+@router.patch("/domains/{domain_id}")
+async def update_domain(domain_id: str, body: DomainUpdate, storage: StorageBackend = Depends(get_storage)):
+    kwargs = body.model_dump(exclude_unset=True)
+    domain = await storage.update_domain(domain_id, **kwargs)
+    if not domain:
+        raise HTTPException(404, "Domain not found")
+    return DomainResponse(**domain)
+
+
+@router.delete("/domains/{domain_id}")
+async def delete_domain(domain_id: str, storage: StorageBackend = Depends(get_storage)):
+    deleted = await storage.delete_domain(domain_id)
+    if not deleted:
+        raise HTTPException(404, "Domain not found")
+    return {"ok": True}
+
+
+@router.post("/import", status_code=201)
+async def bulk_import(body: BulkImportRequest, storage: StorageBackend = Depends(get_storage)):
+    result = await storage.bulk_import_glossary([item.model_dump() for item in body.items])
+    return BulkImportResponse(**result)

@@ -148,6 +148,11 @@ export const glossaryApi = {
   listDomains: () => api.get<Domain[]>("/glossary/domains").then((r) => r.data),
   createDomain: (data: { name: string; description?: string }) =>
     api.post<Domain>("/glossary/domains", data).then((r) => r.data),
+  updateDomain: (id: string, data: { name?: string; description?: string }) =>
+    api.patch<Domain>(`/glossary/domains/${id}`, data).then((r) => r.data),
+  deleteDomain: (id: string) => api.delete(`/glossary/domains/${id}`),
+  bulkImport: (data: { items: { domain: string; description?: string; terms: { term: string; definition?: string }[] }[] }) =>
+    api.post<{ domains_created: number; terms_created: number }>("/glossary/import", data).then((r) => r.data),
 };
 
 export const analyticsApi = {

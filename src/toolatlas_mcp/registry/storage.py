@@ -83,7 +83,7 @@ class StorageBackend:
     async def upsert_tool_setting(self, proxy_id: str, tool_id: str, enabled: bool | None = None, custom_description: str | None = None, alias: str | None = None) -> Any:
         raise NotImplementedError
 
-    async def create_glossary_term(self, term: str, definition: str = "") -> Any:
+    async def create_glossary_term(self, domain_id: str, term: str, definition: str = "") -> Any:
         raise NotImplementedError
 
     async def list_glossary_terms(self) -> list[Any]:
@@ -102,6 +102,15 @@ class StorageBackend:
         raise NotImplementedError
 
     async def list_domains(self) -> list[Any]:
+        raise NotImplementedError
+
+    async def update_domain(self, domain_id: str, **kwargs) -> Any | None:
+        raise NotImplementedError
+
+    async def delete_domain(self, domain_id: str) -> bool:
+        raise NotImplementedError
+
+    async def bulk_import_glossary(self, data: list[dict]) -> dict:
         raise NotImplementedError
 
     async def record_call(

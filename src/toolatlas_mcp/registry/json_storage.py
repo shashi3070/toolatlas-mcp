@@ -378,7 +378,7 @@ class JSONStorage(StorageBackend):
             for g in self._data["glossary_terms"]:
                 if g["id"] == term_id:
                     for k, v in kwargs.items():
-                        if v is not None and k in ("term", "definition"):
+                        if v is not None and k in ("domain_id", "term", "definition"):
                             g[k] = v
                     g["updated_at"] = _utcnow()
                     await self._save()
@@ -416,6 +416,61 @@ class JSONStorage(StorageBackend):
 
     async def list_domains(self) -> list[dict]:
         return [dict(d) for d in self._data["domains"]]
+
+    async def update_domain(self, domain_id: str, **kwargs) -> dict | None:
+        async with self._lock:
+            for d in self._data["domains"]:
+                if d["id"] == domain_id:
+                    for k, v in kwargs.items():
+                        if v is not None and k in ("name", "description"):
+                            d[k] = v
+                    await self._save()
+                    return dict(d)
+            return None
+
+    async def delete_domain(self, domain_id: str) -> bool:
+        async with self._lock:
+            before = len(self._data["domains"])
+            self._data["domains"] = [d for d in self._data["domains"] if d["id"] != domain_id]
+            self._data["glossary_terms"] = [g for g in self._data["glossary_terms"] if g.get("domain_id") != domain_id]
+            if len(self._data["domains"]) < before:
+                await self._save()
+                return True
+            return False
+
+    async def bulk_import_glossary(self, data: list[dict]) -> dict:
+        created_domains = 0
+        created_terms = 0
+        for item in data:
+            domain_name = item.get("domain")
+            if not domain_name:
+                continue
+            existing = [d for d in self._data["domains"] if d["name"] == domain_name]
+            if existing:
+                domain_id = existing[0]["id"]
+            else:
+                domain_id = _uuid()
+                self._data["domains"].append({
+                    "id": domain_id,
+                    "name": domain_name,
+                    "description": item.get("description", ""),
+                    "created_at": _utcnow(),
+                })
+                created_domains += 1
+            for t in item.get("terms", []):
+                if not t.get("term"):
+                    continue
+                self._data["glossary_terms"].append({
+                    "id": _uuid(),
+                    "domain_id": domain_id,
+                    "term": t["term"],
+                    "definition": t.get("definition", ""),
+                    "created_at": _utcnow(),
+                    "updated_at": _utcnow(),
+                })
+                created_terms += 1
+        await self._save()
+        return {"domains_created": created_domains, "terms_created": created_terms}
 
     # ---- Tool Calls ----
 

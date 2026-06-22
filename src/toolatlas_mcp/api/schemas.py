@@ -129,6 +129,7 @@ class GlossaryTermCreate(BaseModel):
 
 
 class GlossaryTermUpdate(BaseModel):
+    domain_id: str | None = None
     term: str | None = None
     definition: str | None = None
 
@@ -148,11 +149,31 @@ class DomainCreate(BaseModel):
     description: str = ""
 
 
+class DomainUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
 class DomainResponse(ResponseModel):
     id: str
     name: str
     description: str
     created_at: datetime | None = None
+
+
+class BulkImportItem(BaseModel):
+    domain: str
+    description: str = ""
+    terms: list[dict[str, str]] = []
+
+
+class BulkImportRequest(BaseModel):
+    items: list[BulkImportItem]
+
+
+class BulkImportResponse(BaseModel):
+    domains_created: int
+    terms_created: int
 
 
 class CallRecordResponse(ResponseModel):

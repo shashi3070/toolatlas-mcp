@@ -324,6 +324,54 @@ class RegistryRepository(StorageBackend):
         result = await self.db.execute(select(Domain).order_by(Domain.name))
         return [_model_to_dict(d) for d in result.scalars().all()]
 
+    async def update_domain(self, domain_id: str, **kwargs) -> dict | None:
+        domain = await self.db.get(Domain, domain_id)
+        if not domain:
+            return None
+        for k, v in kwargs.items():
+            if hasattr(domain, k):
+                setattr(domain, k, v)
+        await self.commit()
+        return _model_to_dict(domain)
+
+    async def delete_domain(self, domain_id: str) -> bool:
+        domain = await self.db.get(Domain, domain_id)
+        if not domain:
+            return False
+        await self.db.execute(
+            delete(GlossaryTerm).where(GlossaryTerm.domain_id == domain_id)
+        )
+        await self.db.delete(domain)
+        await self.commit()
+        return True
+
+    async def bulk_import_glossary(self, data: list[dict]) -> dict:
+        created_domains = 0
+        created_terms = 0
+        for item in data:
+            domain_name = item.get("domain")
+            if not domain_name:
+                continue
+            result = await self.db.execute(select(Domain).where(Domain.name == domain_name))
+            domain = result.scalar_one_or_none()
+            if domain:
+                domain_id = domain.id
+            else:
+                domain = Domain(name=domain_name, description=item.get("description", ""))
+                self.db.add(domain)
+                await self.commit()
+                domain_id = domain.id
+                created_domains += 1
+            for t in item.get("terms", []):
+                if not t.get("term"):
+                    continue
+                gt = GlossaryTerm(domain_id=domain_id, term=t["term"], definition=t.get("definition", ""))
+                self.db.add(gt)
+                created_terms += 1
+            await self.commit()
+        await self.commit()
+        return {"domains_created": created_domains, "terms_created": created_terms}
+
     # ---- Tool Calls (tracking) ----
 
     async def record_call(
