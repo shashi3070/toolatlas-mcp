@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import uuid
@@ -14,29 +15,37 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_sessions: dict[str, dict] = {}
-
-
-def _make_response(msg_id: str | int | None, result: dict | None = None, error: dict | None = None) -> JSONResponse:
-    body: dict = {"jsonrpc": "2.0"}
-    if msg_id is not None:
-        body["id"] = msg_id
-    if error:
-        body["error"] = error
-    else:
-        body["result"] = result or {}
-    return JSONResponse(body)
+_session_queues: dict[str, asyncio.Queue] = {}
+_engines: dict[str, ProxyEngine] = {}
+_engine_locks: dict[str, asyncio.Lock] = {}
+_tools_cache: dict[str, list] = {}
 
 
 def _send_to_session(session_id: str, response: dict):
-    if session_id in _sessions:
-        _sessions[session_id]["response"] = response
+    q = _session_queues.get(session_id)
+    if q is not None:
+        q.put_nowait(response)
+
+
+async def _get_engine(slug: str, storage) -> ProxyEngine:
+    if slug in _engines:
+        return _engines[slug]
+    if slug not in _engine_locks:
+        _engine_locks[slug] = asyncio.Lock()
+    async with _engine_locks[slug]:
+        if slug in _engines:
+            return _engines[slug]
+        engine = ProxyEngine(storage)
+        await engine.initialize_proxy(slug)
+        _engines[slug] = engine
+        return engine
 
 
 @router.get("/proxy/{slug}/sse")
 async def proxy_sse(slug: str, request: Request):
     session_id = str(uuid.uuid4())
-    _sessions[session_id] = {"slug": slug}
+    q: asyncio.Queue = asyncio.Queue()
+    _session_queues[session_id] = q
 
     async def event_generator():
         base = request.scope.get("root_path", "") or ""
@@ -47,14 +56,13 @@ async def proxy_sse(slug: str, request: Request):
             while True:
                 if await request.is_disconnected():
                     break
-                session = _sessions.get(session_id)
-                if session and "response" in session:
-                    response = session.pop("response")
+                try:
+                    response = await asyncio.wait_for(q.get(), timeout=0.5)
                     yield {"event": "message", "data": json.dumps(response)}
-                import asyncio
-                await asyncio.sleep(0.1)
+                except asyncio.TimeoutError:
+                    pass
         finally:
-            _sessions.pop(session_id, None)
+            _session_queues.pop(session_id, None)
 
     return EventSourceResponse(event_generator())
 
@@ -66,41 +74,33 @@ async def proxy_message(slug: str, session_id: str, request: Request):
     msg_id = body.get("id")
 
     async for storage in get_storage():
-        engine = ProxyEngine(storage)
-        try:
-            await engine.initialize_proxy(slug)
+        engine = await _get_engine(slug, storage)
 
-            if method in ("initialize",):
-                result = {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "toolatlas-mcp", "version": __version__},
-                }
-                _sessions[session_id] = {"initialized": True}
-                return _make_response(msg_id, result)
+        if method in ("initialize",):
+            result = {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "toolatlas-mcp", "version": __version__},
+            }
+            _send_to_session(session_id, {"jsonrpc": "2.0", "id": msg_id, "result": result})
+            return JSONResponse({"ok": True}, status_code=202)
 
-            if method in ("notifications/initialized",):
-                return _make_response(None, {})
+        if method in ("notifications/initialized",):
+            return JSONResponse({"ok": True}, status_code=202)
 
-            if method in ("list_tools", "tools/list"):
-                tools = await engine.list_tools(slug)
-                return _make_response(msg_id, {"tools": tools})
+        if method in ("list_tools", "tools/list"):
+            if slug not in _tools_cache:
+                _tools_cache[slug] = await engine.list_tools(slug)
+            tools = _tools_cache[slug]
+            _send_to_session(session_id, {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}})
+            return JSONResponse({"ok": True}, status_code=202)
 
-            if method in ("call_tool", "tools/call"):
-                name = body.get("params", {}).get("name", "")
-                arguments = body.get("params", {}).get("arguments", {})
-                result = await engine.call_tool(slug, name, arguments)
-                return _make_response(msg_id, result)
+        if method in ("call_tool", "tools/call"):
+            name = body.get("params", {}).get("name", "")
+            arguments = body.get("params", {}).get("arguments", {})
+            result = await engine.call_tool(slug, name, arguments)
+            _send_to_session(session_id, {"jsonrpc": "2.0", "id": msg_id, "result": result})
+            return JSONResponse({"ok": True}, status_code=202)
 
-            return _make_response(msg_id, error={"code": -32601, "message": f"Method not found: {method}"})
-
-        except ValueError as e:
-            return _make_response(msg_id, error={"code": -32602, "message": str(e)})
-        except PermissionError as e:
-            return _make_response(msg_id, error={"code": -32001, "message": str(e)})
-        except Exception as e:
-            log.exception("Proxy error")
-            return _make_response(msg_id, error={"code": -32603, "message": str(e)})
-        finally:
-            engine.close()
-        break
+        _send_to_session(session_id, {"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": f"Method not found: {method}"}})
+        return JSONResponse({"ok": True}, status_code=202)
