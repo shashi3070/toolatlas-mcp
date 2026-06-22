@@ -90,7 +90,30 @@ class MCPClient:
         if not self.url:
             raise ValueError("url is required for streamable-http transport")
         self._message_url = self.url
-        self._http_client = httpx.AsyncClient(timeout=30.0)
+        self._http_client = httpx.AsyncClient(timeout=None)
+
+        async def sse_reader():
+            try:
+                async with self._http_client.stream(
+                    "GET", self._message_url,
+                    headers={"Accept": "text/event-stream"},
+                ) as stream:
+                    async for line in stream.aiter_lines():
+                        if line.startswith("data: "):
+                            raw = line[6:].strip()
+                            if not raw:
+                                continue
+                            try:
+                                data = json.loads(raw)
+                                msg_id = data.get("id")
+                                if msg_id and msg_id in self._pending:
+                                    self._pending.pop(msg_id).set_result(data)
+                            except json.JSONDecodeError:
+                                pass
+            except Exception as e:
+                log.debug("Streamable HTTP SSE reader stopped: %s", e)
+
+        self._listener_task = asyncio.create_task(sse_reader())
         self._connected = True
 
     async def _connect_stdio(self):
@@ -135,12 +158,18 @@ class MCPClient:
             future: asyncio.Future = asyncio.get_event_loop().create_future()
             self._pending[msg_id] = future
 
-        if self.transport == "sse":
-            await self._send_http(payload)
-        elif self.transport == "streamable-http":
-            await self._send_streamable_http(payload)
-        elif self.transport == "stdio":
-            await self._send_stdio(payload)
+        try:
+            if self.transport == "sse":
+                await self._send_http(payload)
+            elif self.transport == "streamable-http":
+                await self._send_streamable_http(payload)
+            elif self.transport == "stdio":
+                await self._send_stdio(payload)
+        except Exception:
+            if not is_notification:
+                self._pending.pop(msg_id, None)
+                future.cancel()
+            raise
 
         if is_notification:
             return {}
@@ -160,13 +189,21 @@ class MCPClient:
     async def _send_streamable_http(self, payload: dict):
         if not self._http_client or not self._message_url:
             raise RuntimeError("MCP client not connected")
-        headers = {"Accept": "text/event-stream", "Content-Type": "application/json"}
+        headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
         if self._session_id:
             headers["mcp-session-id"] = self._session_id
         async with self._http_client.stream(
             "POST", self._message_url, json=payload, headers=headers,
         ) as stream:
             self._session_id = stream.headers.get("mcp-session-id")
+            if stream.status_code == 202:
+                return
+            if stream.status_code != 200:
+                body = await stream.aread()
+                detail = body.decode("utf-8", errors="replace")[:500]
+                raise RuntimeError(
+                    f"MCP server returned HTTP {stream.status_code}: {detail}"
+                )
             if not stream.headers.get("content-type", "").startswith("text/event-stream"):
                 raw = await stream.aread()
                 if raw.strip():

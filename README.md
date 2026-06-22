@@ -392,41 +392,199 @@ To use non-interactive mode (no prompts):
 TOOLATLAS_DATA_DIR=/custom/path TOOLATLAS_STORAGE_TYPE=json toolatlas start
 ```
 
-## Subpath Deployment
+## Hosting ToolAtlas Inside an Existing Web Application
 
-To deploy ToolAtlas under a URL prefix (e.g. `https://xyz.com/toolatlas/`) behind a reverse proxy like Nginx:
+This guide explains how to embed ToolAtlas-MCP as a sub-app inside an existing Flask or FastAPI application under a URL prefix (e.g., `/toolatlas/`). No separate container or port is required.
 
-1. **Set the base path:**
-   ```bash
-   export TOOLATLAS_BASE_PATH=/toolatlas
-   ```
+### Prerequisites
 
-2. **Rebuild the React UI with the subpath:**
-   ```bash
-   cd ui
-   VITE_BASE_URL=/toolatlas/ VITE_BASE_PATH=/toolatlas npm run build
-   ```
+- An existing Python web application (Flask or FastAPI) running behind a reverse proxy (nginx, Apache, etc.)
+- Python 3.10+
+- pip access to install the `toolatlas-mcp` package
 
-3. **Configure Nginx** to strip the `/toolatlas` prefix and proxy to ToolAtlas:
-   ```nginx
-   location /toolatlas/ {
-       proxy_pass http://127.0.0.1:8081/;
-       proxy_http_version 1.1;
-       proxy_set_header Upgrade $http_upgrade;
-       proxy_set_header Connection "upgrade";
-       proxy_buffering off;
-       proxy_read_timeout 86400s;
-   }
-   ```
+### Installation
 
-The trailing slash in `proxy_pass` strips `/toolatlas` before forwarding, so ToolAtlas receives requests at `/api/...`, `/proxy/...` as usual. The `base_path` setting only affects URL generation (SSE `message_url`, OpenAPI docs).
+```bash
+pip install toolatlas-mcp
+```
 
-4. **MCP clients** connect to the full path:
-   ```json
-   { "url": "https://xyz.com/toolatlas/proxy/dev/sse" }
-   ```
+This installs:
+- `toolatlas-mcp` — the core package
+- `aiosqlite` — SQLite async driver (needed even for JSON storage)
+- `rich`, `typer` — CLI utilities
+- `fastapi`, `uvicorn` — ASGI dependencies
 
-See [docs/deploy-under-subpath.md](docs/deploy-under-subpath.md) for full details.
+### Storage Configuration
+
+ToolAtlas stores its data (servers, tools, proxies, etc.) in a JSON file by default. Set these environment variables to control storage:
+
+```bash
+export TOOLATLAS_STORAGE_TYPE=json            # "json" (default) or "sqlite"
+export TOOLATLAS_DATA_DIR=/data/toolatlas     # custom data path, default ~/.toolatlas
+```
+
+If not set, data lives at `~/.toolatlas/data.json`.
+
+### Integration
+
+#### Option A: FastAPI (mount as sub-app)
+
+```python
+from fastapi import FastAPI
+from toolatlas_mcp.api.app import create_app as create_toolatlas_app
+from toolatlas_mcp.config import settings as toolatlas_settings
+from toolatlas_mcp.db import init_db, close_db
+from toolatlas_mcp.proxy.engine import close_all_engines
+
+# Your existing FastAPI app
+app = FastAPI()
+
+# ... your existing routes ...
+
+# Mount ToolAtlas under a prefix
+toolatlas_settings.base_path = ""  # mount handles prefixing
+toolatlas_app = create_toolatlas_app()
+app.mount("/toolatlas", toolatlas_app)
+```
+
+Database lifecycle (add to your app's startup/shutdown):
+
+```python
+from contextlib import asynccontextmanager
+import os
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: ensure data dir exists
+    data_dir = os.environ.get("TOOLATLAS_DATA_DIR", "/data/toolatlas")
+    os.makedirs(data_dir, exist_ok=True)
+    await init_db()
+    yield
+    # Shutdown
+    close_all_engines()
+    await close_db()
+
+app = FastAPI(lifespan=lifespan)
+```
+
+#### Option B: Flask (WSGI sub-app)
+
+Flask does not natively support ASGI sub-mounts. Use ASGI middleware or run ToolAtlas as a separate ASGI app behind the same reverse proxy on a different path.
+
+Example using werkzeug middleware (limited):
+
+```python
+from flask import Flask
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+
+app = Flask(__name__)
+
+# ... your existing Flask app ...
+
+# ToolAtlas needs ASGI — use a wrapper or run separately
+```
+
+**Recommended for Flask:** Run ToolAtlas as a separate uvicorn process behind the same nginx, routing `/toolatlas/*` to it. Or migrate your Flask app to FastAPI to get native sub-app mounting.
+
+### SPA Base URL Patching
+
+The ToolAtlas SPA is a Vite/React build that hardcodes its API base URL and React Router basename as empty strings. When mounted under a prefix, these must be patched at runtime.
+
+Add this startup code to patch the minified JS bundle:
+
+```python
+import re
+import glob
+
+# Find the JS bundle
+import toolatlas_mcp as _ta_pkg
+_ta_root = re.sub(r"/?toolatlas_mcp/?$", "", _ta_pkg.__path__[0])
+_js_paths = []
+for _p in [_ta_root + "/toolatlas_mcp/ui/dist/assets", _ta_root + "/ui/dist/assets"]:
+    _js_paths.extend(glob.glob(_p + "/*.js"))
+
+# Patch paths for subpath deployment (e.g., /toolatlas)
+prefix = "/toolatlas"
+for _jsf in _js_paths:
+    try:
+        with open(_jsf) as _f:
+            _c = _f.read()
+        _new_c = (
+            _c.replace('pv=""', f'pv="{prefix}"')      # Axios baseURL
+              .replace('Tv=""', f'Tv="{prefix}"')       # React Router basename
+        )
+        if _new_c != _c:
+            with open(_jsf, "w") as _f:
+                _f.write(_new_c)
+    except Exception:
+        pass
+```
+
+**Why this is needed:** The SPA is built with `VITE_API_BASE_URL=""` and `basename=""`. Without patching, API calls go to `/api/...` (404) and routes fail to match under the prefix.
+
+### Reverse Proxy (nginx)
+
+Add a location block in your nginx config:
+
+```nginx
+location /toolatlas/ {
+    proxy_pass http://127.0.0.1:5100/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 86400s;
+}
+```
+
+Reload nginx:
+
+```bash
+nginx -s reload
+```
+
+### Verifying the Deployment
+
+```bash
+# API health
+curl http://localhost:5100/toolatlas/api/servers
+curl http://localhost:5100/toolatlas/api/tools
+
+# SPA
+curl -o /dev/null -w '%{http_code}' http://localhost:5100/toolatlas/
+# Expected: 200
+
+# Open in browser
+open http://localhost:5100/toolatlas/
+```
+
+### Troubleshooting
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| Blank page, no errors | React Router basename not patched | Run the JS patching code before mount |
+| API calls returning 404 | Axios baseURL not patched | Check `pv=""` was replaced |
+| API calls returning data but blank page | Router basename not patched | Check `Tv=""` was replaced |
+| Data lost after restart | No persistent volume mounted | Set `TOOLATLAS_DATA_DIR` to a persisted path |
+| SQLite file present even with JSON storage | ToolAtlas initializes both; safe to ignore or delete `.db` file after shutdown | — |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `~/.toolatlas/data.json` | Default JSON data file |
+| `~/.toolatlas/toolatlas.db` | SQLite DB (created even in JSON mode, can be deleted) |
+| `site-packages/toolatlas_mcp/ui/dist/assets/index-*.js` | SPA JS bundle that needs patching |
+
+### Notes
+
+- ToolAtlas uses SQLAlchemy internally even for JSON storage. The `aiosqlite` dependency is required regardless of storage backend.
+- The `data.json` file can grow large if many tool calls are recorded. Monitor its size if you enable call tracking.
+- ToolAtlas SPA is a single-page application. Ensure your reverse proxy serves `index.html` for all sub-paths under `/toolatlas/` if you need direct URL entry (FastAPI mount handles this automatically).
 
 ---
 
