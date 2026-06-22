@@ -21,7 +21,11 @@ async def list_terms(storage: StorageBackend = Depends(get_storage)):
 
 @router.post("/terms", status_code=201)
 async def create_term(body: GlossaryTermCreate, storage: StorageBackend = Depends(get_storage)):
+    domain = await storage.list_domains()
+    if not any(d.get("id") == body.domain_id for d in domain):
+        raise HTTPException(400, "Domain not found")
     term = await storage.create_glossary_term(
+        domain_id=body.domain_id,
         term=body.term,
         definition=body.definition,
     )

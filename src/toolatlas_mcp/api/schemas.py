@@ -51,7 +51,7 @@ class ToolResponse(ResponseModel):
     enabled: bool
     tags: list[str] = Field(default_factory=list)
     domain: list[str] = Field(default_factory=list)
-    glossary_term_id: str | None = None
+    glossary_term_ids: list[str] = Field(default_factory=list)
 
     @field_validator("domain", mode="before")
     @classmethod
@@ -70,6 +70,15 @@ class ToolResponse(ResponseModel):
         if isinstance(v, str):
             return [v]
         return v
+
+    @field_validator("glossary_term_ids", mode="before")
+    @classmethod
+    def coerce_glossary_term_ids(cls, v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [v]
+        return v
     server_name: str | None = None
 
 
@@ -78,7 +87,7 @@ class ToolUpdate(BaseModel):
     enabled: bool | None = None
     tags: list[str] | None = None
     domain: list[str] | None = None
-    glossary_term_id: str | None = None
+    glossary_term_ids: list[str] | None = None
 
 
 class ProxyCreate(BaseModel):
@@ -114,6 +123,7 @@ class ToolSettingUpdate(BaseModel):
 
 
 class GlossaryTermCreate(BaseModel):
+    domain_id: str
     term: str
     definition: str = ""
 
@@ -125,8 +135,10 @@ class GlossaryTermUpdate(BaseModel):
 
 class GlossaryTermResponse(ResponseModel):
     id: str
+    domain_id: str
     term: str
     definition: str
+    domain_name: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

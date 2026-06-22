@@ -118,8 +118,11 @@ async def get_proxy_tools(proxy_id: str, storage: StorageBackend = Depends(get_s
                 raw_domains = [raw_domains]
             if raw_domains:
                 enrichment.append(f"Domain: {', '.join(raw_domains)}")
-            if t.get("glossary_term_id"):
-                gt = await storage.get_glossary_term(t["glossary_term_id"])
+            gt_ids = t.get("glossary_term_ids", [])
+            if isinstance(gt_ids, str):
+                gt_ids = [gt_ids]
+            for gid in gt_ids:
+                gt = await storage.get_glossary_term(gid)
                 if gt:
                     enrichment.append(f"Glossary: {gt.get('definition') or gt.get('term')}")
             if enrichment:
@@ -135,7 +138,7 @@ async def get_proxy_tools(proxy_id: str, storage: StorageBackend = Depends(get_s
                 enabled=setting.get("enabled") if setting else t.get("enabled", True),
                 tags=t.get("tags", []),
                 domain=t.get("domain", []),
-                glossary_term_id=t.get("glossary_term_id"),
+                glossary_term_ids=t.get("glossary_term_ids", []),
                 server_name=server.get("name"),
             ))
     return tools

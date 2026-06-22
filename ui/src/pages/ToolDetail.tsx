@@ -16,7 +16,7 @@ export default function ToolDetail() {
   const [description, setDescription] = useState("");
   const [domainsSelected, setDomainsSelected] = useState<string[]>([]);
   const [tags, setTags] = useState("");
-  const [glossaryTermId, setGlossaryTermId] = useState("");
+  const [glossaryTermIds, setGlossaryTermIds] = useState<string[]>([]);
 
   const [testArgs, setTestArgs] = useState<Record<string, unknown>>({});
   const [testing, setTesting] = useState(false);
@@ -35,7 +35,7 @@ export default function ToolDetail() {
       setDescription(t.description || "");
       setDomainsSelected(t.domain || []);
       setTags((t.tags || []).join(", "));
-      setGlossaryTermId(t.glossary_term_id || "");
+      setGlossaryTermIds(t.glossary_term_ids || []);
       const initial: Record<string, unknown> = {};
       if (t.input_schema?.properties) {
         for (const [key, prop] of Object.entries(t.input_schema.properties as Record<string, any>)) {
@@ -58,7 +58,7 @@ export default function ToolDetail() {
         description,
         domain: domainsSelected.length ? domainsSelected : undefined,
         tags: tags ? tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
-        glossary_term_id: glossaryTermId || undefined,
+        glossary_term_ids: glossaryTermIds.length ? glossaryTermIds : undefined,
       });
       setTool(updated);
       setSaved(true);
@@ -98,12 +98,14 @@ export default function ToolDetail() {
 
   const hasCustomDesc = tool.original_description && tool.original_description !== description;
 
-  const selectedTerm = terms.find((t) => t.id === glossaryTermId);
+  const selectedTerms = terms.filter((t) => glossaryTermIds.includes(t.id));
   const enrichmentLines: string[] = [];
   const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
   if (tagList.length) enrichmentLines.push(`Tags: ${tagList.join(", ")}`);
   if (domainsSelected.length) enrichmentLines.push(`Domain: ${domainsSelected.join(", ")}`);
-  if (selectedTerm) enrichmentLines.push(`Glossary: ${selectedTerm.definition || selectedTerm.term}`);
+  for (const st of selectedTerms) {
+    enrichmentLines.push(`Glossary: ${st.definition || st.term}`);
+  }
   const clientPreview = (description || tool.original_description) +
     (enrichmentLines.length ? "\n" + enrichmentLines.join("\n") : "");
 
@@ -165,8 +167,6 @@ export default function ToolDetail() {
   name: tool.name,
   description: clientPreview || tool.description,
   inputSchema: tool.input_schema,
-  server: tool.server_name,
-  enabled: tool.enabled,
 }, null, 2)}
             </pre>
           </div>
@@ -341,19 +341,40 @@ export default function ToolDetail() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Glossary Term</label>
-                <select
-                  value={glossaryTermId}
-                  onChange={(e) => setGlossaryTermId(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-                >
-                  <option value="">-- None --</option>
-                  {terms.map((t) => (
-                    <option key={t.id} value={t.id}>{t.term}</option>
-                  ))}
-                </select>
-                {tool.glossary_term_id && (
-                  <p className="text-xs text-slate-400 mt-1">Linked glossary term enriches this tool's description</p>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Glossary Terms (multi-select)</label>
+                <div className="space-y-1.5 mt-1 max-h-48 overflow-y-auto border rounded-lg p-2">
+                  {terms.length === 0 && (
+                    <p className="text-xs text-slate-400">No terms defined</p>
+                  )}
+                  {domains.map((d) => {
+                    const domainTerms = terms.filter((t) => t.domain_id === d.id);
+                    if (!domainTerms.length) return null;
+                    return (
+                      <div key={d.id}>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1 mt-2 first:mt-0">{d.name}</p>
+                        {domainTerms.map((t) => (
+                          <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:text-slate-900 ml-1">
+                            <input
+                              type="checkbox"
+                              checked={glossaryTermIds.includes(t.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setGlossaryTermIds([...glossaryTermIds, t.id]);
+                                } else {
+                                  setGlossaryTermIds(glossaryTermIds.filter((id) => id !== t.id));
+                                }
+                              }}
+                              className="rounded border-slate-300"
+                            />
+                            {t.term}
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+                {glossaryTermIds.length > 0 && (
+                  <p className="text-xs text-slate-400 mt-1">{glossaryTermIds.length} term(s) linked — enriches tool description</p>
                 )}
               </div>
 

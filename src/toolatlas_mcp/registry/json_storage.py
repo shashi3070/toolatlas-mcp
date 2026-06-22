@@ -94,7 +94,7 @@ class JSONStorage(StorageBackend):
             "enabled": t.get("enabled", True),
             "tags": t.get("tags", []),
             "domain": _ensure_str_list(t.get("domain")),
-            "glossary_term_id": t.get("glossary_term_id"),
+            "glossary_term_ids": t.get("glossary_term_ids", []),
         }
 
     # ---- Servers ----
@@ -172,7 +172,7 @@ class JSONStorage(StorageBackend):
                 "enabled": True,
                 "tags": [],
                 "domain": [],
-                "glossary_term_id": None,
+                "glossary_term_ids": [],
                 "created_at": _utcnow(),
                 "updated_at": _utcnow(),
             }
@@ -197,7 +197,7 @@ class JSONStorage(StorageBackend):
             for t in self._data["tools"]:
                 if t["id"] == tool_id:
                     for k, v in kwargs.items():
-                        if v is not None and k in ("description", "enabled", "tags", "domain", "glossary_term_id"):
+                        if v is not None and k in ("description", "enabled", "tags", "domain", "glossary_term_ids"):
                             t[k] = v
                     t["updated_at"] = _utcnow()
                     await self._save()
@@ -341,10 +341,11 @@ class JSONStorage(StorageBackend):
 
     # ---- Glossary ----
 
-    async def create_glossary_term(self, term: str, definition: str = "") -> dict:
+    async def create_glossary_term(self, domain_id: str, term: str, definition: str = "") -> dict:
         async with self._lock:
             gt = {
                 "id": _uuid(),
+                "domain_id": domain_id,
                 "term": term,
                 "definition": definition,
                 "created_at": _utcnow(),
@@ -355,12 +356,21 @@ class JSONStorage(StorageBackend):
             return dict(gt)
 
     async def list_glossary_terms(self) -> list[dict]:
-        return [dict(g) for g in self._data["glossary_terms"]]
+        terms = []
+        for g in self._data["glossary_terms"]:
+            gt = dict(g)
+            domain = self._get_domain(gt.get("domain_id", ""))
+            gt["domain_name"] = domain.get("name") if domain else None
+            terms.append(gt)
+        return terms
 
     async def get_glossary_term(self, term_id: str) -> dict | None:
         for g in self._data["glossary_terms"]:
             if g["id"] == term_id:
-                return dict(g)
+                gt = dict(g)
+                domain = self._get_domain(gt.get("domain_id", ""))
+                gt["domain_name"] = domain.get("name") if domain else None
+                return gt
         return None
 
     async def update_glossary_term(self, term_id: str, **kwargs) -> dict | None:
@@ -383,6 +393,12 @@ class JSONStorage(StorageBackend):
                 await self._save()
                 return True
             return False
+
+    def _get_domain(self, domain_id: str) -> dict | None:
+        for d in self._data["domains"]:
+            if d["id"] == domain_id:
+                return dict(d)
+        return None
 
     # ---- Domains ----
 

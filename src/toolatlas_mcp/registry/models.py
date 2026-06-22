@@ -45,12 +45,11 @@ class Tool(Base):
     enabled = Column(Boolean, default=True)
     tags = Column(JSON, default=list)
     domain = Column(JSON, default=list)
-    glossary_term_id = Column(String, ForeignKey("glossary_terms.id", ondelete="SET NULL"), nullable=True)
+    glossary_term_ids = Column(JSON, default=list)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     server = relationship("Server", back_populates="tools")
-    glossary_term = relationship("GlossaryTerm")
     proxy_settings = relationship("ProxyToolSetting", back_populates="tool", cascade="all, delete-orphan")
     calls = relationship("ToolCall", back_populates="tool", cascade="all, delete-orphan")
 
@@ -98,10 +97,13 @@ class GlossaryTerm(Base):
     __tablename__ = "glossary_terms"
 
     id = Column(String, primary_key=True, default=_uuid)
+    domain_id = Column(String, ForeignKey("domains.id", ondelete="CASCADE"), nullable=False)
     term = Column(String, nullable=False)
     definition = Column(Text, default="")
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    domain = relationship("Domain")
 
 
 class Domain(Base):

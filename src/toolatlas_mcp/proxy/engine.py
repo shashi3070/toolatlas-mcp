@@ -75,6 +75,9 @@ class ProxyEngine:
                     input_schema=rt.get("inputSchema", {}),
                 )
 
+                if not db_tool.get("enabled", True):
+                    continue
+
                 setting = await self.storage.get_tool_setting(proxy["id"], db_tool["id"])
                 if setting and not setting.get("enabled", True):
                     continue
@@ -96,8 +99,11 @@ class ProxyEngine:
                     raw_domains = [raw_domains]
                 if raw_domains:
                     enrichment.append(f"Domain: {', '.join(raw_domains)}")
-                if db_tool.get("glossary_term_id"):
-                    gt = await self.storage.get_glossary_term(db_tool["glossary_term_id"])
+                gt_ids = db_tool.get("glossary_term_ids", [])
+                if isinstance(gt_ids, str):
+                    gt_ids = [gt_ids]
+                for gid in gt_ids:
+                    gt = await self.storage.get_glossary_term(gid)
                     if gt:
                         enrichment.append(f"Glossary: {gt.get('definition') or gt.get('term')}")
                 if enrichment:
@@ -107,8 +113,6 @@ class ProxyEngine:
                     "name": display_name,
                     "description": display_desc,
                     "inputSchema": rt.get("inputSchema", {}),
-                    "server": server["name"],
-                    "enabled": setting.get("enabled", True) if setting else True,
                 }
 
         return list(tools_map.values())

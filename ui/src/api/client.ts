@@ -24,7 +24,7 @@ export type Tool = {
   enabled: boolean;
   tags: string[];
   domain: string[];
-  glossary_term_id?: string;
+  glossary_term_ids: string[];
   server_name?: string;
 };
 
@@ -39,8 +39,10 @@ export type Proxy = {
 
 export type GlossaryTerm = {
   id: string;
+  domain_id: string;
   term: string;
   definition: string;
+  domain_name?: string;
   created_at?: string;
   updated_at?: string;
 };
@@ -138,7 +140,7 @@ export const proxiesApi = {
 
 export const glossaryApi = {
   listTerms: () => api.get<GlossaryTerm[]>("/glossary/terms").then((r) => r.data),
-  createTerm: (data: { term: string; definition?: string }) =>
+  createTerm: (data: { domain_id: string; term: string; definition?: string }) =>
     api.post<GlossaryTerm>("/glossary/terms", data).then((r) => r.data),
   updateTerm: (id: string, data: Partial<GlossaryTerm>) =>
     api.patch<GlossaryTerm>(`/glossary/terms/${id}`, data).then((r) => r.data),

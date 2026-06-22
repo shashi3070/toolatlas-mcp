@@ -261,19 +261,37 @@ class RegistryRepository(StorageBackend):
 
     # ---- Glossary ----
 
-    async def create_glossary_term(self, term: str, definition: str = "") -> dict:
-        gt = GlossaryTerm(term=term, definition=definition)
+    async def create_glossary_term(self, domain_id: str, term: str, definition: str = "") -> dict:
+        gt = GlossaryTerm(domain_id=domain_id, term=term, definition=definition)
         self.db.add(gt)
         await self.commit()
         return _model_to_dict(gt)
 
     async def list_glossary_terms(self) -> list[dict]:
-        result = await self.db.execute(select(GlossaryTerm).order_by(GlossaryTerm.term))
-        return [_model_to_dict(g) for g in result.scalars().all()]
+        result = await self.db.execute(
+            select(GlossaryTerm, Domain.name.label("domain_name"))
+            .join(Domain, GlossaryTerm.domain_id == Domain.id, isouter=True)
+            .order_by(GlossaryTerm.term)
+        )
+        terms = []
+        for row in result.all():
+            gt = _model_to_dict(row.GlossaryTerm)
+            gt["domain_name"] = row.domain_name
+            terms.append(gt)
+        return terms
 
     async def get_glossary_term(self, term_id: str) -> dict | None:
-        g = await self.db.get(GlossaryTerm, term_id)
-        return _model_to_dict(g)
+        result = await self.db.execute(
+            select(GlossaryTerm, Domain.name.label("domain_name"))
+            .join(Domain, GlossaryTerm.domain_id == Domain.id, isouter=True)
+            .where(GlossaryTerm.id == term_id)
+        )
+        row = result.one_or_none()
+        if not row:
+            return None
+        gt = _model_to_dict(row.GlossaryTerm)
+        gt["domain_name"] = row.domain_name
+        return gt
 
     async def update_glossary_term(self, term_id: str, **kwargs) -> dict | None:
         gt = await self.db.get(GlossaryTerm, term_id)

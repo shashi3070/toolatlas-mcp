@@ -45,7 +45,7 @@ async def list_tools(
             enabled=t.get("enabled", True),
             tags=t.get("tags", []),
             domain=t.get("domain", []),
-            glossary_term_id=t.get("glossary_term_id"),
+            glossary_term_ids=t.get("glossary_term_ids", []),
             server_name=server.get("name") if server else None,
         ))
     return result
@@ -68,7 +68,7 @@ async def get_tool(tool_id: str, storage: StorageBackend = Depends(get_storage))
         enabled=tool.get("enabled", True),
         tags=tool.get("tags", []),
         domain=tool.get("domain", []),
-        glossary_term_id=tool.get("glossary_term_id"),
+        glossary_term_ids=tool.get("glossary_term_ids", []),
         server_name=server.get("name") if server else None,
     )
 
@@ -91,7 +91,7 @@ async def update_tool(tool_id: str, body: ToolUpdate, storage: StorageBackend = 
         enabled=tool.get("enabled", True),
         tags=tool.get("tags", []),
         domain=tool.get("domain", []),
-        glossary_term_id=tool.get("glossary_term_id"),
+        glossary_term_ids=tool.get("glossary_term_ids", []),
         server_name=server.get("name") if server else None,
     )
 
