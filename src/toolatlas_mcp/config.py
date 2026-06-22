@@ -6,9 +6,9 @@ class Settings(BaseSettings):
     model_config = {"env_prefix": "TOOLATLAS_"}
 
     host: str = "127.0.0.1"
-    port: int = 8080
+    port: int = 8081
     database_url: str = f"sqlite+aiosqlite:///{get_data_dir() / 'toolatlas.db'}"
-    storage_type: str = "sqlite"
+    storage_type: str = "json"
     log_level: str = "INFO"
     ui_dir: str = ""
 

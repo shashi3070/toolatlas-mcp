@@ -52,19 +52,20 @@ def _find_free_port(host: str, preferred: int) -> int:
 def start(
     host: str = typer.Option(None, help="Host to bind to"),
     port: int = typer.Option(None, help="Port to bind to"),
+    storage: str = typer.Option("json", "--storage", help="Storage backend (json/sqlite)"),
+    data_dir: str = typer.Option(None, "--data-dir", help="Data directory for databases and config"),
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload"),
 ):
-    if "TOOLATLAS_DATA_DIR" not in os.environ:
+    if data_dir:
+        os.environ["TOOLATLAS_DATA_DIR"] = data_dir
+    elif "TOOLATLAS_DATA_DIR" not in os.environ:
         data_dir = typer.prompt("Data directory", default=str(get_data_dir()))
         os.environ["TOOLATLAS_DATA_DIR"] = data_dir
 
     if "TOOLATLAS_STORAGE_TYPE" not in os.environ:
-        storage_type = typer.prompt(
-            "Storage type (sqlite/json)", default="sqlite",
-            type=click.Choice(["sqlite", "json"]),
-        )
-        settings.storage_type = storage_type
+        os.environ["TOOLATLAS_STORAGE_TYPE"] = storage
 
+    settings.storage_type = os.environ["TOOLATLAS_STORAGE_TYPE"]
     settings.database_url = f"sqlite+aiosqlite:///{get_data_dir() / 'toolatlas.db'}"
     host_val = host or settings.host
     port_val = port or _find_free_port(host_val, settings.port)
