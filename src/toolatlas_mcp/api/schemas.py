@@ -135,7 +135,7 @@ class GlossaryTermUpdate(BaseModel):
 
 class GlossaryTermResponse(ResponseModel):
     id: str
-    domain_id: str
+    domain_id: str = ""
     term: str
     definition: str
     domain_name: str | None = None
