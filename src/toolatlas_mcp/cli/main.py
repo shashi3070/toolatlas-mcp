@@ -77,7 +77,13 @@ def start(
         settings.storage_type = val
     settings.database_url = f"sqlite+aiosqlite:///{get_data_dir() / 'toolatlas.db'}"
     host_val = host or settings.host
-    port_val = port or _find_free_port(host_val, settings.port)
+    if port:
+        port_val = port
+    elif "TOOLATLAS_PORT" in os.environ:
+        port_val = int(os.environ["TOOLATLAS_PORT"])
+    else:
+        port_val = typer.prompt("Port", default=settings.port, type=int)
+    port_val = _find_free_port(host_val, port_val)
     console.print(f"[bold green]ToolAtlas-MCP[/] starting on [bold]{host_val}:{port_val}[/]")
     console.print(f"  Web UI: http://{host_val}:{port_val}")
     console.print(f"  API:    http://{host_val}:{port_val}/api/health")
