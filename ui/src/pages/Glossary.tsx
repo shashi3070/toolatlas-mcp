@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Plus, Pencil, Trash2, Search, X, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Upload, Download } from "lucide-react";
 import { glossaryApi, type GlossaryTerm, type Domain } from "../api/client";
 
 export default function Glossary() {
@@ -203,6 +203,47 @@ function TermsPanel({ terms, domains, onRefresh }: { terms: GlossaryTerm[]; doma
   );
 }
 
+function DownloadTemplateButton() {
+  const download = (format: "json" | "csv") => {
+    if (format === "json") {
+      const sample = [
+        {
+          domain: "development",
+          description: "Software development tools",
+          terms: [
+            { term: "API", definition: "Application Programming Interface" },
+            { term: "Git", definition: "Version control system" },
+          ],
+        },
+      ];
+      const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "glossary-template.json"; a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const sample = "domain,term,definition\r\ndevelopment,API,Application Programming Interface\r\ndevelopment,Git,Version control system\r\nsecurity,XSS,Cross-site scripting";
+      const blob = new Blob([sample], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "glossary-template.csv"; a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  return (
+    <div className="relative group">
+      <button className="flex items-center gap-2 border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-50">
+        <Download size={16} /> Download Template
+      </button>
+      <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg hidden group-hover:block z-10 min-w-[140px]">
+        <button onClick={() => download("json")} className="block w-full text-left px-4 py-2 text-sm hover:bg-slate-50">JSON</button>
+        <button onClick={() => download("csv")} className="block w-full text-left px-4 py-2 text-sm hover:bg-slate-50">CSV</button>
+      </div>
+    </div>
+  );
+}
+
 function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: () => void }) {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -305,6 +346,7 @@ function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: ()
           <Upload size={16} /> {importing ? "Importing..." : "Import JSON/CSV"}
         </button>
         <input ref={fileRef} type="file" accept=".json,.csv" onChange={handleFileUpload} className="hidden" />
+        <DownloadTemplateButton />
         <div className="relative flex-1 max-w-xs">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search domains..." className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm" />

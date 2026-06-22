@@ -17,6 +17,7 @@ export default function ToolDetail() {
   const [domainsSelected, setDomainsSelected] = useState<string[]>([]);
   const [tags, setTags] = useState("");
   const [glossaryTermIds, setGlossaryTermIds] = useState<string[]>([]);
+  const [glossaryDomainFilter, setGlossaryDomainFilter] = useState("");
 
   const [testArgs, setTestArgs] = useState<Record<string, unknown>>({});
   const [testing, setTesting] = useState(false);
@@ -342,18 +343,27 @@ export default function ToolDetail() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Glossary Terms (multi-select)</label>
-                <div className="space-y-1.5 mt-1 max-h-48 overflow-y-auto border rounded-lg p-2">
-                  {terms.length === 0 && (
-                    <p className="text-xs text-slate-400">No terms defined</p>
-                  )}
-                  {domains.map((d) => {
-                    const domainTerms = terms.filter((t) => t.domain_id === d.id);
-                    if (!domainTerms.length) return null;
-                    return (
-                      <div key={d.id}>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1 mt-2 first:mt-0">{d.name}</p>
-                        {domainTerms.map((t) => (
-                          <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:text-slate-900 ml-1">
+                <div className="mt-1 space-y-2">
+                  <select
+                    value={glossaryDomainFilter}
+                    onChange={(e) => setGlossaryDomainFilter(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">-- Select Domain --</option>
+                    {domains.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  <div className="max-h-48 overflow-y-auto border rounded-lg p-2">
+                    {!glossaryDomainFilter ? (
+                      <p className="text-xs text-slate-400">Select a domain above to see its terms</p>
+                    ) : terms.filter((t) => t.domain_id === glossaryDomainFilter).length === 0 ? (
+                      <p className="text-xs text-slate-400">No terms in this domain</p>
+                    ) : (
+                      terms
+                        .filter((t) => t.domain_id === glossaryDomainFilter)
+                        .map((t) => (
+                          <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:text-slate-900 py-0.5">
                             <input
                               type="checkbox"
                               checked={glossaryTermIds.includes(t.id)}
@@ -368,14 +378,16 @@ export default function ToolDetail() {
                             />
                             {t.term}
                           </label>
-                        ))}
-                      </div>
-                    );
-                  })}
+                        ))
+                    )}
+                  </div>
+                  {glossaryTermIds.length > 0 && (
+                    <div className="text-xs text-slate-500">
+                      <p>{glossaryTermIds.length} term(s) linked:</p>
+                      <p className="truncate">{terms.filter((t) => glossaryTermIds.includes(t.id)).map((t) => t.term).join(", ")}</p>
+                    </div>
+                  )}
                 </div>
-                {glossaryTermIds.length > 0 && (
-                  <p className="text-xs text-slate-400 mt-1">{glossaryTermIds.length} term(s) linked — enriches tool description</p>
-                )}
               </div>
 
               <div className="flex items-center gap-2 pt-2 border-t">
