@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from toolatlas_mcp.proxy.server import invalidate_proxy_cache
 from toolatlas_mcp.api.schemas import (
     ProxyCreate,
     ProxyLinkServer,
@@ -32,6 +33,7 @@ async def create_proxy(body: ProxyCreate, storage: StorageBackend = Depends(get_
         slug=body.slug,
         description=body.description,
     )
+    invalidate_proxy_cache(body.slug)
     return ProxyResponse(**proxy)
 
 
@@ -45,22 +47,29 @@ async def get_proxy(proxy_id: str, storage: StorageBackend = Depends(get_storage
 
 @router.patch("/{proxy_id}")
 async def update_proxy(proxy_id: str, body: ProxyUpdate, storage: StorageBackend = Depends(get_storage)):
+    proxy = await storage.get_proxy(proxy_id)
+    if not proxy:
+        raise HTTPException(404, "Proxy not found")
+    old_slug = proxy["slug"]
     kwargs = body.model_dump(exclude_unset=True)
     if "slug" in kwargs:
         existing = await storage.get_proxy_by_slug(kwargs["slug"])
         if existing and existing.get("id") != proxy_id:
             raise HTTPException(400, f"Slug '{kwargs['slug']}' already in use")
     proxy = await storage.update_proxy(proxy_id, **kwargs)
-    if not proxy:
-        raise HTTPException(404, "Proxy not found")
+    invalidate_proxy_cache(old_slug)
+    if "slug" in kwargs:
+        invalidate_proxy_cache(kwargs["slug"])
     return ProxyResponse(**proxy)
 
 
 @router.delete("/{proxy_id}")
 async def delete_proxy(proxy_id: str, storage: StorageBackend = Depends(get_storage)):
-    deleted = await storage.delete_proxy(proxy_id)
-    if not deleted:
+    proxy = await storage.get_proxy(proxy_id)
+    if not proxy:
         raise HTTPException(404, "Proxy not found")
+    invalidate_proxy_cache(proxy["slug"])
+    await storage.delete_proxy(proxy_id)
     return {"ok": True}
 
 
@@ -82,6 +91,7 @@ async def link_server(proxy_id: str, body: ProxyLinkServer, storage: StorageBack
     if not server:
         raise HTTPException(404, "Server not found")
     await storage.link_server_to_proxy(proxy_id, body.server_id, selected_tools=body.tool_names)
+    invalidate_proxy_cache(proxy["slug"])
     if body.tool_names is not None:
         server_tools = await storage.list_tools(server_id=body.server_id)
         for t in server_tools:
@@ -92,6 +102,10 @@ async def link_server(proxy_id: str, body: ProxyLinkServer, storage: StorageBack
 
 @router.delete("/{proxy_id}/servers/{server_id}")
 async def unlink_server(proxy_id: str, server_id: str, storage: StorageBackend = Depends(get_storage)):
+    proxy = await storage.get_proxy(proxy_id)
+    if not proxy:
+        raise HTTPException(404, "Proxy not found")
+    invalidate_proxy_cache(proxy["slug"])
     await storage.unlink_server_from_proxy(proxy_id, server_id)
     return {"ok": True}
 

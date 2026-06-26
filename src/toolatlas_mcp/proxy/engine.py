@@ -54,6 +54,11 @@ class ProxyEngine:
             raise ValueError(f"Proxy '{slug}' not found")
 
         servers = await self.storage.get_proxy_servers(proxy["id"])
+
+        if not self._server_clients:
+            log.info("No server clients for %s — reinitializing", slug)
+            await self.initialize_proxy(slug)
+
         tools_map: dict[str, dict[str, Any]] = {}
 
         for server in servers:
@@ -123,6 +128,10 @@ class ProxyEngine:
             raise ValueError(f"Proxy '{slug}' not found")
 
         servers = await self.storage.get_proxy_servers(proxy["id"])
+
+        if not self._server_clients:
+            log.info("No server clients for %s — reinitializing before tool call", slug)
+            await self.initialize_proxy(slug)
 
         for server in servers:
             client = self._server_clients.get(server["id"])

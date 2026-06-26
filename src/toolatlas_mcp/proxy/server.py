@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 import uuid
 
 from fastapi import APIRouter, Request
@@ -18,7 +19,8 @@ router = APIRouter()
 _session_queues: dict[str, asyncio.Queue] = {}
 _engines: dict[str, ProxyEngine] = {}
 _engine_locks: dict[str, asyncio.Lock] = {}
-_tools_cache: dict[str, list] = {}
+_TOOLS_CACHE_TTL = 60
+_tools_cache: dict[str, tuple[float, list]] = {}
 
 
 def _send_to_session(session_id: str, response: dict):
@@ -27,8 +29,19 @@ def _send_to_session(session_id: str, response: dict):
         q.put_nowait(response)
 
 
+def invalidate_proxy_cache(slug: str):
+    _tools_cache.pop(slug, None)
+    if slug in _engines:
+        _engines[slug].close()
+        del _engines[slug]
+        _engine_locks.pop(slug, None)
+
+
 async def _get_engine(slug: str, storage) -> ProxyEngine:
     if slug in _engines:
+        if not _engines[slug]._server_clients:
+            log.info("Reinitializing proxy engine for %s (no server clients)", slug)
+            await _engines[slug].initialize_proxy(slug)
         return _engines[slug]
     if slug not in _engine_locks:
         _engine_locks[slug] = asyncio.Lock()
@@ -89,9 +102,10 @@ async def proxy_message(slug: str, session_id: str, request: Request):
             return JSONResponse({"ok": True}, status_code=202)
 
         if method in ("list_tools", "tools/list"):
-            if slug not in _tools_cache:
-                _tools_cache[slug] = await engine.list_tools(slug)
-            tools = _tools_cache[slug]
+            cached = _tools_cache.get(slug)
+            if cached is None or time.time() - cached[0] > _TOOLS_CACHE_TTL:
+                _tools_cache[slug] = (time.time(), await engine.list_tools(slug))
+            tools = _tools_cache[slug][1]
             _send_to_session(session_id, {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}})
             return JSONResponse({"ok": True}, status_code=202)
 
