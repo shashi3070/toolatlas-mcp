@@ -83,8 +83,21 @@ class ProxyEngine:
                 try:
                     remote_tools = await client.list_tools()
                 except Exception as e:
-                    log.warning("Failed to list tools from '%s': %s", server["name"], e)
-                    continue
+                    log.warning("Failed to list tools from '%s': %s — removing dead client and reconnecting", server["name"], e)
+                    client.close()
+                    self._server_clients.pop(server["id"], None)
+                    self._tool_to_server.clear()
+                    self._tool_info.clear()
+                    await self._connect_server(server)
+                    client = self._server_clients.get(server["id"])
+                    if client is not None:
+                        try:
+                            remote_tools = await client.list_tools()
+                        except Exception as e2:
+                            log.warning("Failed to list tools from '%s' after reconnect: %s", server["name"], e2)
+                            continue
+                    else:
+                        continue
 
                 for rt in remote_tools:
                     tool_name = rt.get("name", "")

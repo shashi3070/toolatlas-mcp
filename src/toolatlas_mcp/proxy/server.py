@@ -46,13 +46,25 @@ async def _get_engine(slug: str, storage) -> ProxyEngine:
         _engine_locks[slug] = asyncio.Lock()
     async with _engine_locks[slug]:
         if slug in _engines:
-            if not _engines[slug]._server_clients:
-                log.info("Reinitializing proxy engine for %s (no server clients)", slug)
+            engine = _engines[slug]
+            stale = False
+            for sid, client in list(engine._server_clients.items()):
+                reader = getattr(client, '_reader_task', None)
+                if reader and reader.done():
+                    log.warning("Removing stale client for server %s (reader done)", sid)
+                    client.close()
+                    del engine._server_clients[sid]
+                    stale = True
+            if not engine._server_clients:
+                if stale:
+                    log.info("Reinitializing proxy engine for %s (all clients stale)", slug)
+                else:
+                    log.info("Reinitializing proxy engine for %s (no server clients)", slug)
                 _tools_cache.pop(slug, None)
-                await _engines[slug].initialize_proxy(slug)
-            _engines[slug].storage = storage
-            _engines[slug].middleware.storage = storage
-            return _engines[slug]
+                await engine.initialize_proxy(slug)
+            engine.storage = storage
+            engine.middleware.storage = storage
+            return engine
         engine = ProxyEngine(storage)
         await engine.initialize_proxy(slug)
         _engines[slug] = engine

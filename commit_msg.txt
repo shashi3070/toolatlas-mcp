@@ -1,8 +1,6 @@
-v1.11.0: fix 6 bugs — SQLite WAL mode, race conditions, cache leaks
+v1.12.0: fix stale upstream connection detection in proxy
 
-- Bug 1: WAL journal_mode + busy_timeout(10000) + connect_args timeout + NullPool
-- Bug 2: _get_engine race condition — entire check under asyncio.Lock
-- Bug 3: middleware.storage refreshed alongside engine.storage
-- Bug 4: list_tools save/restores _tool_to_server/_tool_info on failure
-- Bug 5: removed module-level _engines list; close_all_engines iterates server.py dict
-- Bug 6: call_tool short-circuits with RuntimeError if list_tools still returns empty
+- engine.py list_tools: dead client reconnect on list_tools failure
+  (close, remove, reconnect, retry once) — mirrors existing call_tool pattern
+- server.py _get_engine: check each client's _reader_task.done() before
+  returning cached engine; remove stale clients; reinitialize if all gone
