@@ -2,11 +2,16 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from toolatlas_mcp.config import settings
 from toolatlas_mcp.registry.storage import StorageBackend, get_data_dir
 
-engine = create_async_engine(settings.database_url, echo=False)
+engine = create_async_engine(
+    settings.database_url, echo=False,
+    connect_args={"timeout": 10},
+    poolclass=NullPool,
+)
 async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -42,6 +47,9 @@ async def init_db():
     async with engine.begin() as conn:
         from toolatlas_mcp.registry.models import Base as RegistryBase
         await conn.run_sync(RegistryBase.metadata.create_all)
+    async with engine.connect() as conn:
+        await conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
+        await conn.exec_driver_sql("PRAGMA busy_timeout=10000;")
 
 
 async def close_db():

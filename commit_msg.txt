@@ -1,0 +1,8 @@
+v1.11.0: fix 6 bugs — SQLite WAL mode, race conditions, cache leaks
+
+- Bug 1: WAL journal_mode + busy_timeout(10000) + connect_args timeout + NullPool
+- Bug 2: _get_engine race condition — entire check under asyncio.Lock
+- Bug 3: middleware.storage refreshed alongside engine.storage
+- Bug 4: list_tools save/restores _tool_to_server/_tool_info on failure
+- Bug 5: removed module-level _engines list; close_all_engines iterates server.py dict
+- Bug 6: call_tool short-circuits with RuntimeError if list_tools still returns empty

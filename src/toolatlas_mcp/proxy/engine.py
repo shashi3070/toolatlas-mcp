@@ -8,15 +8,15 @@ from toolatlas_mcp.registry.storage import StorageBackend
 
 log = logging.getLogger(__name__)
 
-_engines: list["ProxyEngine"] = []
-
-
 def close_all_engines():
-    for eng in list(_engines):
+    from toolatlas_mcp.proxy.server import _engines as engine_dict, _engine_locks
+    for slug, eng in list(engine_dict.items()):
         try:
             eng.close()
         except Exception as e:
-            log.warning("Error closing engine: %s", e)
+            log.warning("Error closing engine for %s: %s", slug, e)
+    engine_dict.clear()
+    _engine_locks.clear()
 
 
 class ProxyEngine:
@@ -26,7 +26,7 @@ class ProxyEngine:
         self._server_clients: dict[str, MCPClient] = {}
         self._tool_to_server: dict[str, str] = {}
         self._tool_info: dict[str, dict] = {}
-        _engines.append(self)
+
 
     async def initialize_proxy(self, slug: str):
         proxy = await self.storage.get_proxy_by_slug(slug)
@@ -70,70 +70,77 @@ class ProxyEngine:
             await self.initialize_proxy(slug)
 
         tools_map: dict[str, dict[str, Any]] = {}
+        old_tts = dict(self._tool_to_server)
+        old_ti = dict(self._tool_info)
         self._tool_to_server.clear()
         self._tool_info.clear()
 
-        for server in servers:
-            client = self._server_clients.get(server["id"])
-            if not client:
-                continue
-            try:
-                remote_tools = await client.list_tools()
-            except Exception as e:
-                log.warning("Failed to list tools from '%s': %s", server["name"], e)
-                continue
-
-            for rt in remote_tools:
-                tool_name = rt.get("name", "")
-                self._tool_to_server[tool_name] = server["id"]
-                self._tool_info[tool_name] = rt
-
-                db_tool = await self.storage.upsert_tool(
-                    server_id=server["id"],
-                    name=tool_name,
-                    description=rt.get("description", ""),
-                    input_schema=rt.get("inputSchema", {}),
-                )
-
-                if not db_tool.get("enabled", True):
+        try:
+            for server in servers:
+                client = self._server_clients.get(server["id"])
+                if not client:
+                    continue
+                try:
+                    remote_tools = await client.list_tools()
+                except Exception as e:
+                    log.warning("Failed to list tools from '%s': %s", server["name"], e)
                     continue
 
-                setting = await self.storage.get_tool_setting(proxy["id"], db_tool["id"])
-                if setting and not setting.get("enabled", True):
-                    continue
-                if setting is None:
-                    selection = await self.storage.get_proxy_server_selection(proxy["id"], server["id"])
-                    if selection is not None and tool_name not in selection:
-                        await self.storage.upsert_tool_setting(proxy["id"], db_tool["id"], enabled=False)
+                for rt in remote_tools:
+                    tool_name = rt.get("name", "")
+                    self._tool_to_server[tool_name] = server["id"]
+                    self._tool_info[tool_name] = rt
+
+                    db_tool = await self.storage.upsert_tool(
+                        server_id=server["id"],
+                        name=tool_name,
+                        description=rt.get("description", ""),
+                        input_schema=rt.get("inputSchema", {}),
+                    )
+
+                    if not db_tool.get("enabled", True):
                         continue
 
-                display_name = setting.get("alias") if setting and setting.get("alias") else db_tool["name"]
-                display_desc = setting.get("custom_description") or db_tool.get("description") if setting else db_tool.get("description", "")
+                    setting = await self.storage.get_tool_setting(proxy["id"], db_tool["id"])
+                    if setting and not setting.get("enabled", True):
+                        continue
+                    if setting is None:
+                        selection = await self.storage.get_proxy_server_selection(proxy["id"], server["id"])
+                        if selection is not None and tool_name not in selection:
+                            await self.storage.upsert_tool_setting(proxy["id"], db_tool["id"], enabled=False)
+                            continue
 
-                enrichment = []
-                tags = db_tool.get("tags", [])
-                if tags:
-                    enrichment.append(f"Tags: {', '.join(tags)}")
-                raw_domains = db_tool.get("domain", [])
-                if isinstance(raw_domains, str):
-                    raw_domains = [raw_domains]
-                if raw_domains:
-                    enrichment.append(f"Domain: {', '.join(raw_domains)}")
-                gt_ids = db_tool.get("glossary_term_ids", [])
-                if isinstance(gt_ids, str):
-                    gt_ids = [gt_ids]
-                for gid in gt_ids:
-                    gt = await self.storage.get_glossary_term(gid)
-                    if gt:
-                        enrichment.append(f"Glossary: {gt.get('definition') or gt.get('term')}")
-                if enrichment:
-                    display_desc = (display_desc + "\n" + "\n".join(enrichment)) if display_desc else "\n".join(enrichment)
+                    display_name = setting.get("alias") if setting and setting.get("alias") else db_tool["name"]
+                    display_desc = setting.get("custom_description") or db_tool.get("description") if setting else db_tool.get("description", "")
 
-                tools_map[tool_name] = {
-                    "name": display_name,
-                    "description": display_desc,
-                    "inputSchema": rt.get("inputSchema", {}),
-                }
+                    enrichment = []
+                    tags = db_tool.get("tags", [])
+                    if tags:
+                        enrichment.append(f"Tags: {', '.join(tags)}")
+                    raw_domains = db_tool.get("domain", [])
+                    if isinstance(raw_domains, str):
+                        raw_domains = [raw_domains]
+                    if raw_domains:
+                        enrichment.append(f"Domain: {', '.join(raw_domains)}")
+                    gt_ids = db_tool.get("glossary_term_ids", [])
+                    if isinstance(gt_ids, str):
+                        gt_ids = [gt_ids]
+                    for gid in gt_ids:
+                        gt = await self.storage.get_glossary_term(gid)
+                        if gt:
+                            enrichment.append(f"Glossary: {gt.get('definition') or gt.get('term')}")
+                    if enrichment:
+                        display_desc = (display_desc + "\n" + "\n".join(enrichment)) if display_desc else "\n".join(enrichment)
+
+                    tools_map[tool_name] = {
+                        "name": display_name,
+                        "description": display_desc,
+                        "inputSchema": rt.get("inputSchema", {}),
+                    }
+        except Exception:
+            self._tool_to_server.update(old_tts)
+            self._tool_info.update(old_ti)
+            raise
 
         return list(tools_map.values())
 
@@ -151,6 +158,8 @@ class ProxyEngine:
         if not self._tool_to_server:
             log.info("Tool→server map empty for %s — rebuilding via list_tools", slug)
             await self.list_tools(slug)
+        if not self._tool_to_server:
+            raise RuntimeError(f"No tools available for proxy '{slug}' — upstream servers may be unreachable")
 
         server_id = self._tool_to_server.get(name)
         server = next((s for s in servers if s["id"] == server_id), None) if server_id else None
@@ -222,5 +231,3 @@ class ProxyEngine:
         self._server_clients.clear()
         self._tool_to_server.clear()
         self._tool_info.clear()
-        if self in _engines:
-            _engines.remove(self)

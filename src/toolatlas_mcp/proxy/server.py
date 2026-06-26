@@ -42,17 +42,16 @@ def invalidate_proxy_cache(slug: str):
 
 
 async def _get_engine(slug: str, storage) -> ProxyEngine:
-    if slug in _engines:
-        if not _engines[slug]._server_clients:
-            log.info("Reinitializing proxy engine for %s (no server clients)", slug)
-            _tools_cache.pop(slug, None)
-            await _engines[slug].initialize_proxy(slug)
-        _engines[slug].storage = storage
-        return _engines[slug]
     if slug not in _engine_locks:
         _engine_locks[slug] = asyncio.Lock()
     async with _engine_locks[slug]:
         if slug in _engines:
+            if not _engines[slug]._server_clients:
+                log.info("Reinitializing proxy engine for %s (no server clients)", slug)
+                _tools_cache.pop(slug, None)
+                await _engines[slug].initialize_proxy(slug)
+            _engines[slug].storage = storage
+            _engines[slug].middleware.storage = storage
             return _engines[slug]
         engine = ProxyEngine(storage)
         await engine.initialize_proxy(slug)
