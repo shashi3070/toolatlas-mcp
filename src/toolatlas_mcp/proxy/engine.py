@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any
 
@@ -23,6 +24,8 @@ class ProxyEngine:
         self.storage = storage
         self.middleware = ProxyMiddleware(storage)
         self._server_clients: dict[str, MCPClient] = {}
+        self._tool_to_server: dict[str, str] = {}
+        self._tool_info: dict[str, dict] = {}
         _engines.append(self)
 
     async def initialize_proxy(self, slug: str):
@@ -40,13 +43,20 @@ class ProxyEngine:
             command=server.get("command"),
             url=server.get("url"),
         )
-        try:
-            await client.connect()
-            await client.initialize()
-            self._server_clients[server["id"]] = client
-            log.info("Connected to MCP server: %s", server["name"])
-        except Exception as e:
-            log.warning("Failed to connect to MCP server '%s': %s", server["name"], e)
+        for attempt in range(3):
+            try:
+                await client.connect()
+                await client.initialize()
+                self._server_clients[server["id"]] = client
+                log.info("Connected to MCP server: %s", server["name"])
+                return
+            except Exception as e:
+                if attempt < 2:
+                    wait = (attempt + 1) * 2
+                    log.warning("Failed to connect to MCP server '%s' (attempt %d/3): %s — retrying in %ds", server["name"], attempt + 1, e, wait)
+                    await asyncio.sleep(wait)
+                else:
+                    log.warning("Failed to connect to MCP server '%s' after 3 attempts: %s", server["name"], e)
 
     async def list_tools(self, slug: str) -> list[dict[str, Any]]:
         proxy = await self.storage.get_proxy_by_slug(slug)
@@ -60,6 +70,8 @@ class ProxyEngine:
             await self.initialize_proxy(slug)
 
         tools_map: dict[str, dict[str, Any]] = {}
+        self._tool_to_server.clear()
+        self._tool_info.clear()
 
         for server in servers:
             client = self._server_clients.get(server["id"])
@@ -73,6 +85,9 @@ class ProxyEngine:
 
             for rt in remote_tools:
                 tool_name = rt.get("name", "")
+                self._tool_to_server[tool_name] = server["id"]
+                self._tool_info[tool_name] = rt
+
                 db_tool = await self.storage.upsert_tool(
                     server_id=server["id"],
                     name=tool_name,
@@ -133,63 +148,79 @@ class ProxyEngine:
             log.info("No server clients for %s — reinitializing before tool call", slug)
             await self.initialize_proxy(slug)
 
-        for server in servers:
-            client = self._server_clients.get(server["id"])
-            if not client:
-                continue
+        if not self._tool_to_server:
+            log.info("Tool→server map empty for %s — rebuilding via list_tools", slug)
+            await self.list_tools(slug)
 
+        server_id = self._tool_to_server.get(name)
+        server = next((s for s in servers if s["id"] == server_id), None) if server_id else None
+        if not server:
+            raise ValueError(f"Tool '{name}' not found in proxy '{slug}'")
+
+        client = self._server_clients.get(server["id"])
+        if not client:
+            raise ValueError(f"Server '{server['name']}' not connected for proxy '{slug}'")
+
+        remote_tool = self._tool_info.get(name, {})
+        db_tool = await self.storage.upsert_tool(
+            server_id=server["id"],
+            name=name,
+            description=remote_tool.get("description", ""),
+            input_schema=remote_tool.get("inputSchema", {}),
+        )
+
+        setting = await self.storage.get_tool_setting(proxy["id"], db_tool["id"])
+
+        async with self.middleware.track(
+            tool_name=name,
+            proxy_id=proxy["id"],
+            tool_id=db_tool["id"],
+            server_id=server["id"],
+            request_args=arguments,
+        ) as ctx:
+            ctx["add_event"]("proxy_lookup", f"Proxy '{slug}' resolved", {
+                "proxy_slug": slug, "proxy_name": proxy["name"],
+            })
+            ctx["add_event"]("tool_resolution", f"Tool '{name}' resolved to server '{server['name']}'", {
+                "server": server["name"], "tool_enabled": setting.get("enabled", True) if setting else True,
+            })
+            if setting and not setting.get("enabled", True):
+                ctx["add_event"]("tool_disabled", f"Tool '{name}' is disabled in proxy '{slug}'", {
+                    "tool": name, "proxy": slug,
+                })
+                raise PermissionError(f"Tool '{name}' is disabled in proxy '{slug}'")
+
+            ctx["add_event"]("server_call_start", f"Forwarding to MCP server '{server['name']}'", {
+                "server": server["name"], "transport": server.get("transport"),
+            })
             try:
-                remote_tools = await client.list_tools()
+                result = await asyncio.wait_for(client.call_tool(name, arguments), timeout=30)
+            except asyncio.TimeoutError:
+                log.warning("Tool call '%s' on server '%s' timed out after 30s", name, server["name"])
+                raise TimeoutError(f"Tool '{name}' call timed out after 30s")
             except Exception:
-                continue
+                log.warning("Tool call '%s' failed on server '%s', attempting reconnect", name, server["name"])
+                client.close()
+                self._server_clients.pop(server["id"], None)
+                await self._connect_server(server)
+                client = self._server_clients.get(server["id"])
+                if client is None:
+                    raise RuntimeError(f"Failed to reconnect to server '{server['name']}'")
+                result = await asyncio.wait_for(client.call_tool(name, arguments), timeout=30)
 
-            remote_tool_match = next((rt for rt in remote_tools if rt.get("name") == name), None)
-            if remote_tool_match:
-                db_tool = await self.storage.upsert_tool(
-                    server_id=server["id"],
-                    name=name,
-                    description=remote_tool_match.get("description", ""),
-                    input_schema=remote_tool_match.get("inputSchema", {}),
-                )
-
-                setting = await self.storage.get_tool_setting(proxy["id"], db_tool["id"])
-
-                async with self.middleware.track(
-                    tool_name=name,
-                    proxy_id=proxy["id"],
-                    tool_id=db_tool["id"],
-                    server_id=server["id"],
-                    request_args=arguments,
-                ) as ctx:
-                    ctx["add_event"]("proxy_lookup", f"Proxy '{slug}' resolved", {
-                        "proxy_slug": slug, "proxy_name": proxy["name"],
-                    })
-                    ctx["add_event"]("tool_resolution", f"Tool '{name}' resolved to server '{server['name']}'", {
-                        "server": server["name"], "tool_enabled": setting.get("enabled", True) if setting else True,
-                    })
-                    if setting and not setting.get("enabled", True):
-                        ctx["add_event"]("tool_disabled", f"Tool '{name}' is disabled in proxy '{slug}'", {
-                            "tool": name, "proxy": slug,
-                        })
-                        raise PermissionError(f"Tool '{name}' is disabled in proxy '{slug}'")
-
-                    ctx["add_event"]("server_call_start", f"Forwarding to MCP server '{server['name']}'", {
-                        "server": server["name"], "transport": server.get("transport"),
-                    })
-                    result = await client.call_tool(name, arguments)
-                    ctx["add_event"]("server_response", f"Response from server '{server['name']}'", {
-                        "result_summary": str(result)[:300],
-                    })
-                    ctx["add_event"]("response_returned", "Response forwarded to client", {
-                        "result_summary": str(result)[:300],
-                    })
-                return result
-
-        raise ValueError(f"Tool '{name}' not found in proxy '{slug}'")
+            ctx["add_event"]("server_response", f"Response from server '{server['name']}'", {
+                "result_summary": str(result)[:300],
+            })
+            ctx["add_event"]("response_returned", "Response forwarded to client", {
+                "result_summary": str(result)[:300],
+            })
+        return result
 
     def close(self):
         for client in self._server_clients.values():
             client.close()
         self._server_clients.clear()
+        self._tool_to_server.clear()
+        self._tool_info.clear()
         if self in _engines:
             _engines.remove(self)
