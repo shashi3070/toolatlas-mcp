@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from toolatlas_mcp.api.app import create_app
 from toolatlas_mcp.config import settings
-from toolatlas_mcp.db import Base, get_db
+from toolatlas_mcp.db import Base, get_db, get_storage
 from toolatlas_mcp.registry.repository import RegistryRepository
 from tests.fixtures.mcp_servers.aws_mcp import AWSMCPServer
 from tests.fixtures.mcp_servers.confluence_mcp import ConfluenceMCPServer
@@ -85,7 +85,7 @@ async def _seed_server_with_tools(repo, sc):
     )
     for tc in sc.get("tools", []):
         await repo.upsert_tool(
-            server_id=server.id,
+            server_id=server["id"],
             name=tc["name"],
             description=tc.get("description", ""),
             input_schema=tc.get("input_schema", {}),
@@ -120,14 +120,14 @@ async def seed_proxies(repo):
         for server_name in pc["servers"]:
             server = server_map.get(server_name)
             if server:
-                await repo.link_server_to_proxy(proxy.id, server.id)
+                await repo.link_server_to_proxy(proxy["id"], server["id"])
 
-                tools = await repo.list_tools(server_id=server.id)
+                tools = await repo.list_tools(server_id=server["id"])
                 for tool in tools:
-                    overrides = pc["tool_overrides"].get(tool.name, {})
+                    overrides = pc["tool_overrides"].get(tool["name"], {})
                     await repo.upsert_tool_setting(
-                        proxy_id=proxy.id,
-                        tool_id=tool.id,
+                        proxy_id=proxy["id"],
+                        tool_id=tool["id"],
                         enabled=overrides.get("enabled", True),
                         custom_description=overrides.get("custom_description"),
                         alias=overrides.get("alias"),
@@ -139,12 +139,12 @@ async def seed_proxies(repo):
 async def client(db_engine):
     app = create_app()
 
-    async def override_get_db():
+    async def override_get_storage():
         session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
         async with session_factory() as session:
-            yield session
+            yield RegistryRepository(session)
 
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_storage] = override_get_storage
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -178,25 +178,26 @@ async def seeded_client():
             for server_name in pc["servers"]:
                 server = server_map.get(server_name)
                 if server:
-                    await repo.link_server_to_proxy(proxy.id, server.id)
-                    tools = await repo.list_tools(server_id=server.id)
+                    await repo.link_server_to_proxy(proxy["id"], server["id"])
+                    tools = await repo.list_tools(server_id=server["id"])
                     for tool in tools:
-                        overrides = pc["tool_overrides"].get(tool.name, {})
+                        overrides = pc["tool_overrides"].get(tool["name"], {})
                         await repo.upsert_tool_setting(
-                            proxy_id=proxy.id,
-                            tool_id=tool.id,
+                            proxy_id=proxy["id"],
+                            tool_id=tool["id"],
                             enabled=overrides.get("enabled", True),
                         )
 
+        domain = await repo.create_domain(name="Engineering", description="Software engineering domain")
         glossary = load_json("glossary_terms.json")
         for gt in glossary:
-            await repo.create_glossary_term(term=gt["term"], definition=gt["definition"])
+            await repo.create_glossary_term(domain_id=domain["id"], term=gt["term"], definition=gt["definition"])
 
-    async def override_get_db():
+    async def override_get_storage():
         async with session_factory() as session:
-            yield session
+            yield RegistryRepository(session)
 
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_storage] = override_get_storage
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

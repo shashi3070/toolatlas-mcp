@@ -70,6 +70,9 @@ class JSONStorage(StorageBackend):
     async def close(self):
         await self.save()
 
+    async def commit(self):
+        await self.save()
+
     def _server_to_dict(self, s: dict) -> dict:
         return {
             "id": s.get("id", ""),
@@ -78,6 +81,12 @@ class JSONStorage(StorageBackend):
             "command": s.get("command"),
             "url": s.get("url"),
             "enabled": s.get("enabled", True),
+            "connection_status": s.get("connection_status", "unknown"),
+            "latency_ms": s.get("latency_ms"),
+            "reconnect_count": s.get("reconnect_count", 0),
+            "last_heartbeat": s.get("last_heartbeat"),
+            "last_tool_sync": s.get("last_tool_sync"),
+            "tool_hash": s.get("tool_hash"),
             "created_at": s.get("created_at"),
             "updated_at": s.get("updated_at"),
         }
@@ -108,6 +117,12 @@ class JSONStorage(StorageBackend):
                 "command": command,
                 "url": url,
                 "enabled": True,
+                "connection_status": "unknown",
+                "latency_ms": None,
+                "reconnect_count": 0,
+                "last_heartbeat": None,
+                "last_tool_sync": None,
+                "tool_hash": None,
                 "created_at": _utcnow(),
                 "updated_at": _utcnow(),
             }
@@ -128,13 +143,31 @@ class JSONStorage(StorageBackend):
         async with self._lock:
             for s in self._data["servers"]:
                 if s["id"] == server_id:
+                    allowed = ("name", "transport", "command", "url", "enabled",
+                               "connection_status", "latency_ms", "reconnect_count",
+                               "last_heartbeat", "last_tool_sync", "tool_hash")
                     for k, v in kwargs.items():
-                        if v is not None and k in ("name", "transport", "command", "url", "enabled"):
+                        if v is not None and k in allowed:
                             s[k] = v
                     s["updated_at"] = _utcnow()
                     await self._save()
                     return self._server_to_dict(s)
             return None
+
+    async def update_server_status(self, server_id: str, connection_status: str | None = None,
+                                    latency_ms: float | None = None,
+                                    reconnect_count: int | None = None,
+                                    last_heartbeat=None) -> dict | None:
+        return await self.update_server(
+            server_id,
+            connection_status=connection_status,
+            latency_ms=latency_ms,
+            reconnect_count=reconnect_count,
+            last_heartbeat=last_heartbeat,
+        )
+
+    async def get_server_tool_count(self, server_id: str) -> int:
+        return sum(1 for t in self._data["tools"] if t["server_id"] == server_id)
 
     async def delete_server(self, server_id: str) -> bool:
         async with self._lock:
@@ -148,7 +181,7 @@ class JSONStorage(StorageBackend):
 
     # ---- Tools ----
 
-    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any]) -> dict:
+    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any], auto_commit: bool = True) -> dict:
         async with self._lock:
             for t in self._data["tools"]:
                 if t["server_id"] == server_id and t["name"] == name:
@@ -159,7 +192,8 @@ class JSONStorage(StorageBackend):
                     if input_schema:
                         t["input_schema"] = input_schema
                     t["updated_at"] = _utcnow()
-                    await self._save()
+                    if auto_commit:
+                        await self._save()
                     return self._tool_to_dict(t)
             tool = {
                 "id": _uuid(),
@@ -177,7 +211,8 @@ class JSONStorage(StorageBackend):
                 "updated_at": _utcnow(),
             }
             self._data["tools"].append(tool)
-            await self._save()
+            if auto_commit:
+                await self._save()
             return self._tool_to_dict(tool)
 
     async def list_tools(self, server_id: str | None = None) -> list[dict]:
@@ -315,7 +350,7 @@ class JSONStorage(StorageBackend):
                 return dict(ts)
         return None
 
-    async def upsert_tool_setting(self, proxy_id: str, tool_id: str, enabled: bool | None = None, custom_description: str | None = None, alias: str | None = None) -> dict:
+    async def upsert_tool_setting(self, proxy_id: str, tool_id: str, enabled: bool | None = None, custom_description: str | None = None, alias: str | None = None, auto_commit: bool = True) -> dict:
         async with self._lock:
             for ts in self._data["proxy_tool_settings"]:
                 if ts["proxy_id"] == proxy_id and ts["tool_id"] == tool_id:
@@ -336,7 +371,8 @@ class JSONStorage(StorageBackend):
                 "alias": alias,
             }
             self._data["proxy_tool_settings"].append(setting)
-            await self._save()
+            if auto_commit:
+                await self._save()
             return dict(setting)
 
     # ---- Glossary ----

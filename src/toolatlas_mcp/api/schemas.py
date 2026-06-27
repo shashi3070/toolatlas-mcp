@@ -36,6 +36,12 @@ class ServerResponse(ResponseModel):
     command: str | None = None
     url: str | None = None
     enabled: bool
+    connection_status: str = "unknown"
+    latency_ms: float | None = None
+    reconnect_count: int = 0
+    last_heartbeat: datetime | None = None
+    last_tool_sync: datetime | None = None
+    tool_hash: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -219,3 +225,115 @@ class ToolTestResponse(BaseModel):
     result: dict | None = None
     error: str | None = None
     duration_ms: float
+
+
+class DashboardSummaryResponse(BaseModel):
+    servers: dict = Field(default_factory=lambda: {"total": 0, "connected": 0, "disconnected": 0, "unknown": 0, "total_tools": 0})
+    proxies: dict = Field(default_factory=lambda: {"total": 0})
+    tools: dict = Field(default_factory=lambda: {"total": 0})
+    calls: dict = Field(default_factory=lambda: {"per_minute": 0, "total": 0})
+    latency: dict = Field(default_factory=lambda: {"avg_ms": 0})
+    cache: dict = Field(default_factory=lambda: {"hit_rate": 0, "entries": 0})
+    recent_alerts: list = Field(default_factory=list)
+    recent_activity: list = Field(default_factory=list)
+
+
+class ProxyDesignerServer(BaseModel):
+    server: ServerResponse
+    tools: list[dict] = Field(default_factory=list)
+
+
+class ProxyDesignerResponse(BaseModel):
+    proxy: ProxyResponse
+    servers: list[ProxyDesignerServer] = Field(default_factory=list)
+
+
+class ProxyDesignerSave(BaseModel):
+    servers: list[dict] = Field(default_factory=list)
+
+
+class SearchResult(BaseModel):
+    servers: list[ServerResponse] = Field(default_factory=list)
+    tools: list[ToolResponse] = Field(default_factory=list)
+    proxies: list[ProxyResponse] = Field(default_factory=list)
+    glossary_terms: list[GlossaryTermResponse] = Field(default_factory=list)
+
+
+class GraphNode(BaseModel):
+    id: str
+    type: str
+    name: str
+    status: str | None = None
+
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    type: str
+
+
+class GraphResponse(BaseModel):
+    nodes: list[GraphNode] = Field(default_factory=list)
+    edges: list[GraphEdge] = Field(default_factory=list)
+
+
+class ServerPingResponse(BaseModel):
+    id: str
+    status: str
+    latency_ms: float | None = None
+    connection_status: str
+    error: str | None = None
+
+
+# ── Tool Graph ───────────────────────────────────────────────────────────
+
+class TraceNode(BaseModel):
+    id: str
+    type: str = "call"
+    tool_name: str
+    duration_ms: float = 0.0
+    success: bool = True
+    timestamp: str | None = None
+
+
+class TraceEdge(BaseModel):
+    source: str
+    target: str
+    label: str | None = None
+    duration_ms: float | None = None
+
+
+class TraceGraphResponse(BaseModel):
+    trace_id: str
+    nodes: list[TraceNode] = Field(default_factory=list)
+    edges: list[TraceEdge] = Field(default_factory=list)
+    total_duration_ms: float = 0.0
+    tool_count: int = 0
+
+
+class TraceSummary(BaseModel):
+    trace_id: str
+    tool_count: int
+    total_duration_ms: float
+    first_timestamp: str | None = None
+    last_timestamp: str | None = None
+    success_rate: float = 0.0
+    tool_names: list[str] = Field(default_factory=list)
+
+
+class CoOccurrenceNode(BaseModel):
+    id: str
+    tool_name: str
+    call_count: int
+
+
+class CoOccurrenceEdge(BaseModel):
+    source: str
+    target: str
+    weight: int
+    avg_gap_ms: float | None = None
+
+
+class CoOccurrenceResponse(BaseModel):
+    nodes: list[CoOccurrenceNode] = Field(default_factory=list)
+    edges: list[CoOccurrenceEdge] = Field(default_factory=list)

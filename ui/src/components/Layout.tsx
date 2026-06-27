@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  LayoutDashboard, Server, Shuffle, Wrench, BookOpen, BarChart3,
+  LayoutDashboard, Server, Shuffle, Wrench, BookOpen, BarChart3, Share2,
 } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/graph", label: "Graph", icon: Share2 },
   { to: "/servers", label: "Servers", icon: Server },
   { to: "/proxies", label: "Proxies", icon: Shuffle },
   { to: "/tools", label: "Tools", icon: Wrench },
@@ -40,7 +41,7 @@ export default function Layout() {
           ))}
         </nav>
         <div className="p-3 border-t border-blue-900 text-xs text-blue-300">
-          v0.1.0
+          v2.0.2
         </div>
       </aside>
       <main className="flex-1 overflow-auto p-6 bg-slate-50">

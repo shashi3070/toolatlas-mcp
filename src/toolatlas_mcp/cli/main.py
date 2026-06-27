@@ -39,8 +39,9 @@ def _find_free_port(host: str, preferred: int) -> int:
 def start(
     host: str = typer.Option(None, help="Host to bind to"),
     port: int = typer.Option(None, help="Port to bind to"),
-    storage: str = typer.Option(None, "--storage", help="Storage backend (json/sqlite)"),
+    storage: str = typer.Option(None, "--storage", help="Storage backend (json/sqlite/postgres)"),
     data_dir: str = typer.Option(None, "--data-dir", help="Data directory for databases and config"),
+    database_url: str = typer.Option(None, "--database-url", help="Database connection URL (e.g. postgresql+asyncpg://user:pass@host:5432/dbname)"),
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload"),
 ):
     if data_dir:
@@ -49,6 +50,10 @@ def start(
         data_dir = typer.prompt("Data directory", default=str(get_data_dir()))
         os.environ["TOOLATLAS_DATA_DIR"] = data_dir
 
+    if database_url:
+        os.environ["TOOLATLAS_DATABASE_URL"] = database_url
+        settings.database_url = database_url
+
     if "TOOLATLAS_STORAGE_TYPE" in os.environ:
         settings.storage_type = os.environ["TOOLATLAS_STORAGE_TYPE"]
     elif storage:
@@ -56,13 +61,30 @@ def start(
         settings.storage_type = storage
     else:
         while True:
-            val = typer.prompt("Storage type (json/sqlite)", default="json")
-            if val in ("json", "sqlite"):
+            val = typer.prompt("Storage type (json/sqlite/postgres)", default="json")
+            if val in ("json", "sqlite", "postgres"):
                 break
-            console.print("[red]Invalid choice. Enter 'json' or 'sqlite'.[/]")
+            console.print("[red]Invalid choice. Enter 'json', 'sqlite', or 'postgres'.[/]")
         os.environ["TOOLATLAS_STORAGE_TYPE"] = val
         settings.storage_type = val
-    settings.database_url = f"sqlite+aiosqlite:///{get_data_dir() / 'toolatlas.db'}"
+
+    if settings.storage_type == "sqlite":
+        if not database_url and "TOOLATLAS_DATABASE_URL" not in os.environ:
+            settings.database_url = f"sqlite+aiosqlite:///{get_data_dir() / 'toolatlas.db'}"
+    elif settings.storage_type == "postgres":
+        if not database_url and "TOOLATLAS_DATABASE_URL" not in os.environ:
+            pg_host = typer.prompt("Postgres host", default="localhost")
+            pg_port = typer.prompt("Postgres port", default="5432")
+            pg_db = typer.prompt("Database name", default="toolatlas")
+            pg_user = typer.prompt("Username", default="postgres")
+            pg_pass = typer.prompt("Password", hide_input=True, default="")
+            settings.database_url = f"postgresql+asyncpg://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+        try:
+            import asyncpg  # noqa: F401
+        except ImportError:
+            console.print("[red]The 'asyncpg' package is required for PostgreSQL. Install with: pip install toolatlas-mcp[postgres][/]")
+            raise typer.Exit(code=1)
+
     host_val = host or settings.host
     if port:
         port_val = port

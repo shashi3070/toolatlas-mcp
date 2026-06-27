@@ -8,6 +8,7 @@ import Tools from "./pages/Tools";
 import ToolDetail from "./pages/ToolDetail";
 import Glossary from "./pages/Glossary";
 import Analytics from "./pages/Analytics";
+import Graph from "./pages/Graph";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/tools/:id" element={<ToolDetail />} />
         <Route path="/glossary" element={<Glossary />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/graph" element={<Graph />} />
       </Route>
     </Routes>
   );

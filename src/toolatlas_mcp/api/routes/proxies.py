@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from toolatlas_mcp.proxy.server import invalidate_proxy_cache
 from toolatlas_mcp.api.schemas import (
     ProxyCreate,
+    ProxyDesignerResponse,
+    ProxyDesignerSave,
     ProxyLinkServer,
     ProxyResponse,
     ProxyStatsResponse,
@@ -96,7 +98,8 @@ async def link_server(proxy_id: str, body: ProxyLinkServer, storage: StorageBack
         server_tools = await storage.list_tools(server_id=body.server_id)
         for t in server_tools:
             if t.get("name") not in body.tool_names:
-                await storage.upsert_tool_setting(proxy_id, t.get("id", ""), enabled=False)
+                await storage.upsert_tool_setting(proxy_id, t.get("id", ""), enabled=False, auto_commit=False)
+        await storage.commit()
     return {"ok": True}
 
 
@@ -187,3 +190,60 @@ async def get_proxy_stats(proxy_id: str, storage: StorageBackend = Depends(get_s
         raise HTTPException(404, "Proxy not found")
     stats = await storage.get_proxy_stats(proxy_id)
     return ProxyStatsResponse(**stats)
+
+
+@router.get("/{proxy_id}/designer")
+async def get_proxy_designer(proxy_id: str, storage: StorageBackend = Depends(get_storage)):
+    proxy = await storage.get_proxy(proxy_id)
+    if not proxy:
+        raise HTTPException(404, "Proxy not found")
+
+    servers = await storage.get_proxy_servers(proxy_id)
+    designer_servers = []
+    for server in servers:
+        sid = server.get("id", "")
+        server_tools = await storage.list_tools(server_id=sid)
+        tool_list = []
+        for t in server_tools:
+            setting = await storage.get_tool_setting(proxy_id, t.get("id", ""))
+            tool_list.append({
+                "id": t.get("id", ""),
+                "name": t.get("name", ""),
+                "description": t.get("description", ""),
+                "enabled": setting.get("enabled", True) if setting else t.get("enabled", True),
+                "alias": setting.get("alias") if setting else None,
+                "custom_description": setting.get("custom_description") if setting else None,
+            })
+        designer_servers.append({
+            "server": ServerResponse(**server),
+            "tools": tool_list,
+        })
+
+    return ProxyDesignerResponse(proxy=ProxyResponse(**proxy), servers=designer_servers)
+
+
+@router.post("/{proxy_id}/designer/save")
+async def save_proxy_designer(proxy_id: str, body: ProxyDesignerSave, storage: StorageBackend = Depends(get_storage)):
+    proxy = await storage.get_proxy(proxy_id)
+    if not proxy:
+        raise HTTPException(404, "Proxy not found")
+
+    for entry in body.servers:
+        server_id = entry.get("server_id")
+        if not server_id:
+            continue
+        tools_config = entry.get("tools", [])
+        for tc in tools_config:
+            tool_id = tc.get("id")
+            if not tool_id:
+                continue
+            await storage.upsert_tool_setting(
+                proxy_id, tool_id,
+                enabled=tc.get("enabled"),
+                alias=tc.get("alias"),
+                custom_description=tc.get("custom_description"),
+                auto_commit=False,
+            )
+    await storage.commit()
+    invalidate_proxy_cache(proxy["slug"])
+    return {"ok": True}

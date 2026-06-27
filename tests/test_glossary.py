@@ -16,9 +16,12 @@ async def test_list_glossary_terms(seeded_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_create_glossary_term(seeded_client: AsyncClient):
+    domains = (await seeded_client.get("/api/glossary/domains")).json()
+    assert len(domains) > 0
+    domain_id = domains[0]["id"]
     resp = await seeded_client.post(
         "/api/glossary/terms",
-        json={"term": "Endpoint", "definition": "An API endpoint URL"},
+        json={"domain_id": domain_id, "term": "Endpoint", "definition": "An API endpoint URL"},
     )
     assert resp.status_code == 201
     data = resp.json()
@@ -56,9 +59,12 @@ async def test_update_glossary_term(seeded_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_delete_glossary_term(seeded_client: AsyncClient):
+    domains = (await seeded_client.get("/api/glossary/domains")).json()
+    assert len(domains) > 0
+    domain_id = domains[0]["id"]
     resp = await seeded_client.post(
         "/api/glossary/terms",
-        json={"term": "TempTerm", "definition": "To be deleted"},
+        json={"domain_id": domain_id, "term": "TempTerm", "definition": "To be deleted"},
     )
     term_id = resp.json()["id"]
 

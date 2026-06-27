@@ -17,6 +17,9 @@ class StorageBackend:
     async def close(self):
         pass
 
+    async def commit(self):
+        pass
+
     async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> Any:
         raise NotImplementedError
 
@@ -29,10 +32,16 @@ class StorageBackend:
     async def update_server(self, server_id: str, **kwargs) -> Any | None:
         raise NotImplementedError
 
+    async def update_server_status(self, server_id: str, connection_status: str | None = None, latency_ms: float | None = None, reconnect_count: int | None = None, last_heartbeat: Any = None) -> Any | None:
+        raise NotImplementedError
+
     async def delete_server(self, server_id: str) -> bool:
         raise NotImplementedError
 
-    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any]) -> Any:
+    async def get_server_tool_count(self, server_id: str) -> int:
+        raise NotImplementedError
+
+    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any], auto_commit: bool = True) -> Any:
         raise NotImplementedError
 
     async def list_tools(self, server_id: str | None = None) -> list[Any]:
@@ -80,7 +89,7 @@ class StorageBackend:
     async def get_tool_setting(self, proxy_id: str, tool_id: str) -> Any | None:
         raise NotImplementedError
 
-    async def upsert_tool_setting(self, proxy_id: str, tool_id: str, enabled: bool | None = None, custom_description: str | None = None, alias: str | None = None) -> Any:
+    async def upsert_tool_setting(self, proxy_id: str, tool_id: str, enabled: bool | None = None, custom_description: str | None = None, alias: str | None = None, auto_commit: bool = True) -> Any:
         raise NotImplementedError
 
     async def create_glossary_term(self, domain_id: str, term: str, definition: str = "") -> Any:

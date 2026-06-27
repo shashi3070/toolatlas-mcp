@@ -14,6 +14,7 @@ ToolAtlas helps organizations **discover, govern, understand, and optimize** MCP
 pip install toolatlas-mcp
 toolatlas start                  # defaults: port 8081, json storage
 toolatlas start --port 9000 --storage sqlite --data-dir ./data
+toolatlas start --storage postgres --database-url "postgresql+asyncpg://user:pass@localhost:5432/toolatlas"
 ```
 
 ---
@@ -102,10 +103,25 @@ Organize glossary terms under domains (created first, then terms under them). Te
 ### 🔍 Filters & Search
 Every management page (Tools, Servers, Proxies, Glossary, Analytics) includes search bars and filter dropdowns for quick navigation.
 
+### 🕸️ Tool Graph — Visualize Relationships & Execution Workflows
+Explore how your MCP ecosystem connects. The Graph page offers three views:
+
+- **Call Flow** — See the ordered sequence of tool calls within a single execution trace. Each call is a node; arrows show the execution order with timing labels. Click any trace in the side panel to visualize its flow as a directed acyclic graph.
+- **Relationships** — Discover which tools are frequently called together. A force-directed graph shows co-occurrence strength via edge thickness and node size (call count). The side panel lists tool pairs ranked by co-occurrence count.
+- **Topology** — The full infrastructure graph: proxies, servers, and their tools. Proxy-to-server edges are dashed; server-to-tool edges are solid. Color-coded by type (blue=proxy, green=server, amber=tool).
+
+**API endpoints:**
+| Endpoint | Returns |
+|----------|---------|
+| `GET /api/graph` | Full topology (proxies, servers, tools) |
+| `GET /api/graph/proxy/{id}` | Topology scoped to a single proxy |
+| `GET /api/graph/traces` | Recent execution traces with tool counts, duration, success rate |
+| `GET /api/graph/trace/{id}` | Ordered call flow DAG for a specific trace |
+| `GET /api/graph/co-occurrence` | Tool co-occurrence pairs with weights, filterable by proxy |
+
 ### 🔮 Planned Features
 | Feature | Status |
 |---------|--------|
-| **Tool Graph** — Visualize relationships between tools and discover real execution workflows | Planned |
 | **Tool Recommendations** — Recommend the best tools for tasks based on usage patterns | Planned |
 
 ---
@@ -148,6 +164,12 @@ Clients speak MCP to ToolAtlas. ToolAtlas enforces governance, enriches tool des
 
 ```bash
 pip install toolatlas-mcp
+```
+
+**PostgreSQL support** (optional — requires `asyncpg`):
+
+```bash
+pip install "toolatlas-mcp[postgres]"
 ```
 
 Verify it installed:
@@ -342,39 +364,226 @@ Go to the **Analytics** page in the web UI to see:
 | `toolatlas start` | Start the ToolAtlas server (defaults: port 8081, json storage) |
 | `toolatlas start --port 9000 --host 0.0.0.0` | Start on a different address |
 | `toolatlas start --storage sqlite` | Use SQLite storage backend |
+| `toolatlas start --storage postgres --database-url "postgresql+asyncpg://user:pass@host:5432/db"` | Use PostgreSQL storage backend |
+| `toolatlas start --database-url "postgresql+asyncpg://..."` | Set database URL directly (any SQLAlchemy dialect) |
 | `toolatlas start --data-dir ./my-data` | Custom data directory |
 | `toolatlas start --reload` | Start with auto-reload (development) |
 
-All flags: `--port`, `--host`, `--storage` (json/sqlite), `--data-dir`, `--reload`. Environment variables are still supported with `TOOLATLAS_` prefix and take precedence over defaults.
+All flags: `--port`, `--host`, `--storage` (json/sqlite/postgres), `--database-url`, `--data-dir`, `--reload`. Environment variables are still supported with `TOOLATLAS_` prefix and take precedence over defaults. You can also use a `.env` file in the working directory to set any `TOOLATLAS_*` variable.
 
 ---
 
 ## Storage
 
-ToolAtlas supports two storage backends:
+ToolAtlas supports three storage backends:
 
 | Backend | Type | Best for |
 |---------|------|----------|
 | **JSON File** (default) | `json` | Development, single-user, portable setups, git-versioned data |
-| **SQLite** | `sqlite` | Production, multi-user, analytics-heavy workloads |
+| **SQLite** | `sqlite` | Production, multi-user, analytics-heavy workloads (good for up to ~10 concurrent connections) |
+| **PostgreSQL** | `postgres` | Production, high-concurrency, many concurrent connections (no write-lock contention) |
+
+### Storage Backend Comparison
+
+| Feature | JSON | SQLite | PostgreSQL |
+|---------|------|--------|------------|
+| **Dependencies** | built-in | built-in | `pip install toolatlas-mcp[postgres]` |
+| **Concurrent reads** | asyncio-lock serialized | WAL mode (reads don't block reads) | Full MVCC |
+| **Concurrent writes** | asyncio-lock serialized | One writer at a time (WAL mode) | Many concurrent writers |
+| **Persistence** | Single file | Single file | External server |
+| **Setup** | None | None | Requires running PostgreSQL instance |
+
+> **Tip:** SQLite with WAL mode + batch commits (v1.13+) handles moderate concurrency well. Switch to PostgreSQL when you have many concurrent proxy instances or tool discovery calls happening at the same time.
+
+### PostgreSQL Connection Pooling (v2.0.0+)
+
+When using PostgreSQL, ToolAtlas automatically configures:
+- **`AsyncAdaptedQueuePool`** with `pool_size=10` and `max_overflow=20` — no new TCP connection per query
+- **`command_timeout=10`** — proper asyncpg parameter (not the aiosqlite `timeout`)
+- **Early `asyncpg` detection** — a clear `RuntimeError` is raised at import if `asyncpg` is missing
 
 The `data.json` file is saved to the same data directory as the SQLite database.
 
+---
+
+## v3.0 Advanced Features
+
+### 🔌 Plugin System
+
+ToolAtlas v3.0 ships with a hook-based plugin architecture. Plugins can intercept and extend every major lifecycle event.
+
+**Built-in plugins:**
+
+| Plugin | Entry point | Enables via |
+|--------|------------|-------------|
+| Redis/Memory Cache | `cache` | `TOOLATLAS_PLUGINS=cache` |
+| Prometheus Metrics | `metrics` | `TOOLATLAS_PLUGINS=metrics` |
+
+**Available hooks (all optional):**
+
+| Hook | Fires | Use case |
+|------|-------|----------|
+| `on_before_list_tools` | Before listing tools for a proxy | Modify or filter tool list |
+| `on_after_list_tools` | After listing | Log results, inject extra tools |
+| `on_before_tool_call` | Before executing a tool | Validate arguments, audit |
+| `on_after_tool_call` | After tool execution | Record results, metrics |
+| `on_before_cache_lookup` | Before cache read | Return cached data early |
+| `on_after_cache_lookup` | After cache read | Track hit/miss stats |
+| `on_cache_invalidated` | When cache is cleared | Propagate invalidation to Redis |
+| `on_tool_added` | Registry sync discovers a new tool | Notify, index |
+| `on_tool_updated` | Registry sync detects changes | Re-index |
+| `on_tool_removed` | A tool is deleted from a server | Clean up |
+| `on_server_connected` | A new MCP client connects | Tag connections |
+| `on_startup` / `on_shutdown` | Server lifecycle | Initialize / teardown resources |
+
+**Enable plugins:**
+
+```bash
+# Via environment variable
+export TOOLATLAS_PLUGINS="cache,metrics"
+
+# Or via CLI
+toolatlas start
+```
+
+**Plugin discovery order:**
+1. Entry points registered in `pyproject.toml` under `[project.entry-points."toolatlas.plugins"]`
+2. Directories listed in `TOOLATLAS_PLUGIN_DIRS`
+3. Module paths listed in `TOOLATLAS_PLUGINS`
+
+**Write a custom plugin:**
+
+```python
+from toolatlas_mcp.plugin.base import Plugin, PluginContext
+
+class MyPlugin(Plugin):
+    name = "my_plugin"
+
+    async def on_before_tool_call(self, ctx: PluginContext, tool_name: str, arguments: dict) -> None:
+        print(f"Tool {tool_name} called with {arguments}")
+
+    async def on_after_tool_call(self, ctx: PluginContext, tool_name: str, result: dict) -> None:
+        print(f"Tool {tool_name} returned: {result}")
+```
+
+Register via entry point in `pyproject.toml`:
+```toml
+[project.entry-points."toolatlas.plugins"]
+my_plugin = "my_package.plugins:MyPlugin"
+```
+
+### 🗄️ Redis Cache (built-in plugin)
+
+When the `cache` plugin is enabled, ToolAtlas uses a two-tier cache:
+
+1. **Memory** (in-process dict, shared across all proxies for the same server)
+2. **Redis** (optional, when `TOOLATLAS_REDIS_URL` is set)
+
+```bash
+export TOOLATLAS_PLUGINS="cache"
+export TOOLATLAS_REDIS_URL="redis://localhost:6379/0"
+export TOOLATLAS_CACHE_TTL=300
+```
+
+Without Redis, the cache plugin operates in memory-only mode. If Redis is configured but unreachable, it falls back to memory automatically.
+
+Cache keys are `tools:{slug}` with TTL equal to `TOOLATLAS_CACHE_TTL`. Each cache hit refreshes the TTL.
+
+### 📊 Prometheus Metrics (built-in plugin)
+
+When the `metrics` plugin is enabled, ToolAtlas exposes a `/metrics` endpoint at the API root:
+
+```bash
+export TOOLATLAS_PLUGINS="metrics"
+```
+
+```bash
+curl http://localhost:8081/metrics
+```
+
+Exported metrics:
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `toolatlas_calls_total` | Counter | `proxy`, `tool`, `status` |
+| `toolatlas_call_duration_seconds` | Histogram | `proxy`, `tool` |
+| `toolatlas_cache_hits_total` | Counter | `proxy` |
+| `toolatlas_cache_misses_total` | Counter | `proxy` |
+
+### 🔄 Background Registry Sync
+
+Once enabled (built-in, no plugin needed), ToolAtlas periodically polls every connected MCP server for its current tool list. It:
+
+1. Fetches the remote tool list via the shared `ConnectionManager`
+2. Computes a SHA-256 hash of all tool definitions
+3. Compares against the stored hash on the `Server` record
+4. **If unchanged** — skips DB writes entirely
+5. **If changed** — upserts new/updated tools, deletes removed ones, and auto-invalidates proxy caches
+
+The sync runs every `TOOLATLAS_REGISTRY_SYNC_INTERVAL` seconds (default: 30). You can configure it:
+
+```bash
+export TOOLATLAS_REGISTRY_SYNC_INTERVAL=60
+```
+
+The sync only processes enabled servers. Disabled servers and connection failures are skipped gracefully with a warning log.
+
+### 🔗 Shared ConnectionManager
+
+All proxy engines now share a single `ConnectionManager` that maintains one `MCPClient` per `server_id`. Benefits:
+
+- **Fewer connections** — 100 proxies all pointing to the same GitHub server share a single TCP connection
+- **Auto-reconnect** — stale clients are detected and reconnected on next use
+- **Graceful shutdown** — `connection_manager.close_all()` cleanly closes all clients
+
+No configuration needed — this is enabled automatically.
+
+---
+
 ## Configuration
 
-Set via environment variables with `TOOLATLAS_` prefix:
+Set via environment variables with `TOOLATLAS_` prefix. A `.env` file in the working directory is also loaded automatically.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TOOLATLAS_HOST` | `127.0.0.1` | Bind address |
 | `TOOLATLAS_PORT` | `8081` | HTTP port (auto-increments if in use) |
-| `TOOLATLAS_DATABASE_URL` | `sqlite+aiosqlite:///<data_dir>/toolatlas.db` | Database connection (only for `sqlite` backend) |
-| `TOOLATLAS_STORAGE_TYPE` | `json` | Storage backend (`json` or `sqlite`) |
+| `TOOLATLAS_DATABASE_URL` | `sqlite+aiosqlite:///<data_dir>/toolatlas.db` | Database connection URL (any SQLAlchemy async dialect) |
+| `TOOLATLAS_STORAGE_TYPE` | `json` | Storage backend (`json`, `sqlite`, or `postgres`) |
 | `TOOLATLAS_DATA_DIR` | `~/.toolatlas` (Unix) / `%APPDATA%\ToolAtlas` (Win) | Data directory for databases and config |
 | `TOOLATLAS_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
 | `TOOLATLAS_BASE_PATH` | `""` | URL prefix when deployed behind a reverse proxy (e.g. `/toolatlas`) |
+| `TOOLATLAS_REDIS_URL` | `""` | Redis URL for shared cache layer (e.g. `redis://localhost:6379/0`) |
+| `TOOLATLAS_CACHE_TTL` | `300` | Cache TTL in seconds for proxy tool listings |
+| `TOOLATLAS_REGISTRY_SYNC_INTERVAL` | `30` | Background sync interval in seconds |
+| `TOOLATLAS_PLUGINS` | `[]` | Comma-separated list of plugin entry-point names or module paths to load |
+| `TOOLATLAS_PLUGIN_DIRS` | `[]` | Comma-separated list of directories to scan for plugin modules |
 
-When starting interactively, you'll be prompted for the data directory and storage type if the environment variables aren't set. The CLI automatically scans for a free port (8080→8280) if the default port is occupied.
+When starting interactively, you'll be prompted for the data directory and storage type if the environment variables aren't set. If you choose `postgres`, you'll be prompted for the connection details (host, port, database name, username, password). You can also provide a `--database-url` flag or `TOOLATLAS_DATABASE_URL` env var to skip prompts.
+
+### What's New in v3.0.0
+
+| Area | Change | Impact |
+|------|--------|--------|
+| **ConnectionManager** | Shared `MCPClient` pool — one client per `server_id` reused across all proxies | Eliminates redundant connections; auto-reconnects stale clients; reduces total TCP connections |
+| **Background Registry Sync** | Periodic SHA-256 sync of all upstream servers (default 30s) | Tools auto-discover, update, and remove without manual `discover`; stale detection is continuous |
+| **Plugin Architecture** | Hook-based plugin system with `on_before_tool_call`, `on_after_tool_call`, `on_before_cache_lookup`, `on_tool_added`/`updated`/`removed` | Extend ToolAtlas without modifying core — built-in Cache + Metrics plugins included |
+| **Cache Plugin (built-in)** | Memory→Redis two-tier cache with TTL jitter, warmup on startup, and stats | Redis as optional shared cache layer (`TOOLATLAS_REDIS_URL`); falls back to memory if unavailable |
+| **Metrics Plugin (built-in)** | Prometheus-compatible counters for call count, latency, errors, cache hit ratio | `/metrics` endpoint for Prometheus scraping; no external dependencies beyond `prometheus-client` |
+| **TTL Jitter** | Cache TTL randomly jittered by ±10% | Prevents thundering herd when multiple proxy TTLs expire simultaneously |
+
+### What's New in v2.0.0
+
+| Area | Change | Impact |
+|------|--------|--------|
+| **PostgreSQL** | Dialect-aware `connect_args`, `AsyncAdaptedQueuePool` (pool=10, overflow=20), early `asyncpg` import check | PostgreSQL now works reliably without crashes or per-query TCP overhead |
+| **Transaction safety** | `commit()` wraps exceptions with `rollback()` — poisoned sessions are cleaned up | Eliminates `ResourceClosedError: This transaction is closed` errors |
+| **Cache locking** | `list_tools` cache miss uses double-checked locking under `_engine_locks[slug]` | Prevents redundant `list_tools` flood when multiple domains' TTLs expire simultaneously |
+| **Batch commits** | Proxy link-server tool disabling now uses `auto_commit=False` + single `commit()` | 130 toggles → 1 commit instead of 130 |
+| **Stale detection** | Tool cache cleared immediately when any upstream client goes stale (not only when all are gone) | No stale tools returned after partial connection loss |
+| **Import hygiene** | `from sqlalchemy import JSON` instead of `sqlalchemy.dialects.sqlite.JSON` | Cleaner, semantically correct for all dialects |
+
+The CLI automatically scans for a free port (8080→8280) if the default port is occupied.
 
 Example:
 
@@ -391,6 +600,18 @@ To use non-interactive mode (no prompts):
 ```bash
 TOOLATLAS_DATA_DIR=/custom/path TOOLATLAS_STORAGE_TYPE=json toolatlas start
 ```
+
+### Using a `.env` file
+
+Create a `.env` file in the directory where you run `toolatlas start`:
+
+```env
+TOOLATLAS_STORAGE_TYPE=postgres
+TOOLATLAS_DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/toolatlas
+TOOLATLAS_DATA_DIR=./toolatlas-dev
+```
+
+Then simply run `toolatlas start` — all values are picked up automatically.
 
 ## Hosting ToolAtlas Inside an Existing Web Application
 
@@ -414,12 +635,15 @@ This installs:
 - `rich`, `typer` — CLI utilities
 - `fastapi`, `uvicorn` — ASGI dependencies
 
+For PostgreSQL, install with: `pip install "toolatlas-mcp[postgres]"`
+
 ### Storage Configuration
 
 ToolAtlas stores its data (servers, tools, proxies, etc.) in a JSON file by default. Set these environment variables to control storage:
 
 ```bash
-export TOOLATLAS_STORAGE_TYPE=json            # "json" (default) or "sqlite"
+export TOOLATLAS_STORAGE_TYPE=json            # "json" (default), "sqlite", or "postgres"
+export TOOLATLAS_DATABASE_URL=...             # required for "postgres", e.g. "postgresql+asyncpg://user:pass@host:5432/toolatlas"
 export TOOLATLAS_DATA_DIR=/data/toolatlas     # custom data path, default ~/.toolatlas
 ```
 

@@ -42,7 +42,11 @@ class RegistryRepository(StorageBackend):
         self.db = db
 
     async def commit(self):
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
 
     # ---- Servers ----
 
@@ -71,6 +75,28 @@ class RegistryRepository(StorageBackend):
         await self.commit()
         return _model_to_dict(server)
 
+    async def update_server_status(self, server_id: str, connection_status: str | None = None,
+                                    latency_ms: float | None = None,
+                                    reconnect_count: int | None = None,
+                                    last_heartbeat=None) -> dict | None:
+        kwargs = {}
+        if connection_status is not None:
+            kwargs["connection_status"] = connection_status
+        if latency_ms is not None:
+            kwargs["latency_ms"] = latency_ms
+        if reconnect_count is not None:
+            kwargs["reconnect_count"] = reconnect_count
+        if last_heartbeat is not None:
+            kwargs["last_heartbeat"] = last_heartbeat
+        return await self.update_server(server_id, **kwargs)
+
+    async def get_server_tool_count(self, server_id: str) -> int:
+        from sqlalchemy import func, select
+        result = await self.db.execute(
+            select(func.count(Tool.id)).where(Tool.server_id == server_id)
+        )
+        return result.scalar() or 0
+
     async def delete_server(self, server_id: str) -> bool:
         server = await self.db.get(Server, server_id)
         if not server:
@@ -81,7 +107,7 @@ class RegistryRepository(StorageBackend):
 
     # ---- Tools ----
 
-    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any]) -> dict:
+    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any], auto_commit: bool = True) -> dict:
         result = await self.db.execute(
             select(Tool).where(Tool.server_id == server_id, Tool.name == name)
         )
@@ -104,7 +130,8 @@ class RegistryRepository(StorageBackend):
                 input_schema=input_schema,
             )
             self.db.add(tool)
-        await self.commit()
+        if auto_commit:
+            await self.commit()
         return _model_to_dict(tool)
 
     async def list_tools(self, server_id: str | None = None) -> list[dict]:
@@ -232,6 +259,7 @@ class RegistryRepository(StorageBackend):
         enabled: bool | None = None,
         custom_description: str | None = None,
         alias: str | None = None,
+        auto_commit: bool = True,
     ) -> dict:
         result = await self.db.execute(
             select(ProxyToolSetting).where(
@@ -256,7 +284,8 @@ class RegistryRepository(StorageBackend):
                 alias=alias,
             )
             self.db.add(setting)
-        await self.commit()
+        if auto_commit:
+            await self.commit()
         return _model_to_dict(setting)
 
     # ---- Glossary ----

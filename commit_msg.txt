@@ -1,6 +1,0 @@
-v1.12.0: fix stale upstream connection detection in proxy
-
-- engine.py list_tools: dead client reconnect on list_tools failure
-  (close, remove, reconnect, retry once) — mirrors existing call_tool pattern
-- server.py _get_engine: check each client's _reader_task.done() before
-  returning cached engine; remove stale clients; reinitialize if all gone

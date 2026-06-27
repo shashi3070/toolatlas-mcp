@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "toolatlas-mcp"
-version = "1.12.0"
+version = "3.0.0"
 description = "ToolAtlas — Discover, Govern, and Optimize MCP Tools"
 readme = "README.md"
 license = "MIT"
@@ -49,6 +49,15 @@ dev = [
     "pytest-cov>=5",
     "ruff>=0.3",
     "mypy>=1.8",
+]
+postgres = [
+    "asyncpg>=0.30",
+]
+redis = [
+    "redis>=5.0",
+]
+all = [
+    "toolatlas-mcp[postgres,redis]",
 ]
 
 [project.urls]

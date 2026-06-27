@@ -230,17 +230,52 @@ export default function Servers() {
         {filtered.map((s) => (
           <div key={s.id} className="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div>
-                  <span className="font-semibold">{s.name}</span>
-                  <span className="text-xs text-slate-400 ml-2 font-mono">{s.transport}</span>
-                  <span className="text-xs text-slate-400 ml-2 font-mono">{s.url || s.command}</span>
-                </div>
-                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${s.enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                  {s.enabled ? "Enabled" : "Disabled"}
-                </span>
-              </div>
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <span className="font-semibold">{s.name}</span>
+                      <span className="text-xs text-slate-400 ml-2 font-mono">{s.transport}</span>
+                      <span className="text-xs text-slate-400 ml-2 font-mono">{s.url || s.command}</span>
+                    </div>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                      s.connection_status === "connected" ? "bg-green-100 text-green-700" :
+                      s.connection_status === "disconnected" ? "bg-red-100 text-red-700" :
+                      "bg-slate-100 text-slate-600"
+                    }`}>
+                      {s.connection_status === "connected" ? "🟢 Connected" :
+                       s.connection_status === "disconnected" ? "🔴 Offline" :
+                       s.connection_status || "Unknown"}
+                    </span>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${s.enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      {s.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      const result = await serversApi.ping(s.id);
+                      load();
+                    } catch {}
+                  }}
+                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-green-600"
+                  title="Ping server"
+                >
+                  <Wifi size={12} />
+                  Ping
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await serversApi.reconnect(s.id);
+                      load();
+                    } catch {}
+                  }}
+                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600"
+                  title="Reconnect"
+                >
+                  <RefreshCw size={12} />
+                  Reconnect
+                </button>
                 <button
                   onClick={() => handleDiscoverExisting(s)}
                   disabled={discoveringId === s.id}

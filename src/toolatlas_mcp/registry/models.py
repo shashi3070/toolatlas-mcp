@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.sqlite import JSON
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import DateTime as _DateTime
 from sqlalchemy.orm import relationship
 
 from toolatlas_mcp.db import Base
@@ -16,6 +16,9 @@ def _uuid():
     return str(uuid.uuid4())
 
 
+DateTime = _DateTime(timezone=True)
+
+
 class Server(Base):
     __tablename__ = "servers"
 
@@ -25,6 +28,12 @@ class Server(Base):
     command = Column(Text, nullable=True)
     url = Column(String, nullable=True)
     enabled = Column(Boolean, default=True)
+    connection_status = Column(String, default="unknown")
+    latency_ms = Column(Float, nullable=True)
+    reconnect_count = Column(Integer, default=0)
+    last_heartbeat = Column(DateTime, nullable=True)
+    last_tool_sync = Column(DateTime, nullable=True)
+    tool_hash = Column(String, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
