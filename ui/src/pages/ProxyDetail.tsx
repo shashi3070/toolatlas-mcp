@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Link2, Unlink, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { ArrowLeft, Link2, Unlink, ToggleLeft, ToggleRight, X, Search } from "lucide-react";
 import { proxiesApi, serversApi, type Server, type Tool } from "../api/client";
 
 export default function ProxyDetail() {
@@ -13,6 +13,12 @@ export default function ProxyDetail() {
   const [selectedServerId, setSelectedServerId] = useState("");
   const [serverTools, setServerTools] = useState<Tool[]>([]);
   const [checkedTools, setCheckedTools] = useState<Set<string>>(new Set());
+  const [toolSearch, setToolSearch] = useState("");
+
+  const filteredTools = useMemo(
+    () => serverTools.filter((t) => t.name.toLowerCase().includes(toolSearch.toLowerCase())),
+    [serverTools, toolSearch],
+  );
 
   const load = async () => {
     if (!id) return;
@@ -35,6 +41,7 @@ export default function ProxyDetail() {
     const tools = await serversApi.discover(serverId);
     setServerTools(tools);
     setCheckedTools(new Set(tools.map((t) => t.id)));
+    setToolSearch("");
     setShowToolModal(true);
   };
 
@@ -167,8 +174,39 @@ export default function ProxyDetail() {
               <h3 className="font-semibold">Select tools from {allServers.find((s) => s.id === selectedServerId)?.name}</h3>
               <button onClick={() => setShowToolModal(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
             </div>
-            <div className="px-6 py-4 overflow-y-auto flex-1 space-y-2">
-              {serverTools.map((t) => (
+
+            <div className="px-6 pt-4 pb-2 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search tools..."
+                  value={toolSearch}
+                  onChange={(e) => setToolSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <button
+                onClick={() => setCheckedTools(new Set(filteredTools.map((t) => t.id)))}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Select All
+              </button>
+              <button
+                onClick={() => setCheckedTools(new Set())}
+                className="text-xs text-slate-500 hover:text-slate-700 font-medium"
+              >
+                Deselect All
+              </button>
+            </div>
+
+            <div className="px-6 pb-1 text-xs text-slate-400">
+              {checkedTools.size} of {serverTools.length} tools selected
+              {toolSearch && filteredTools.length < serverTools.length && ` (${filteredTools.length} matching)`}
+            </div>
+
+            <div className="px-6 py-2 overflow-y-auto flex-1 space-y-1">
+              {filteredTools.map((t) => (
                 <label key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
                   <input
                     type="checkbox"
@@ -186,11 +224,14 @@ export default function ProxyDetail() {
                   </div>
                 </label>
               ))}
+              {filteredTools.length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-4">No tools match your search</p>
+              )}
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t">
               <button onClick={() => setShowToolModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
               <button onClick={confirmLink} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                Link {serverTools.length - checkedTools.size > 0 ? `(${checkedTools.size} tools)` : ""}
+                Link ({checkedTools.size} tool{checkedTools.size !== 1 ? "s" : ""})
               </button>
             </div>
           </div>

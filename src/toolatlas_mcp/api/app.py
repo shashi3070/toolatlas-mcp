@@ -114,7 +114,7 @@ def create_app() -> FastAPI:
         )
 
         from toolatlas_mcp.proxy.server import warmup_proxy_caches
-        await warmup_proxy_caches(_warmup_storage)
+        asyncio.create_task(warmup_proxy_caches(_warmup_storage))
 
         log.info("ToolAtlas-MCP started on %s:%s", app_settings.host, app_settings.port)
 
