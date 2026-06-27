@@ -119,21 +119,26 @@ async def _get_engine(slug: str, storage) -> ProxyEngine:
         return engine
 
 
+async def _warmup_single_proxy(slug: str, storage):
+    """Warm up a single proxy's cache."""
+    try:
+        engine = await _get_engine(slug, storage)
+        tools = await engine.list_tools(slug)
+        _tools_cache[slug] = (time.time(), tools)
+        log.info("Warmed cache for proxy '%s' (%d tools)", slug, len(tools))
+    except Exception as e:
+        log.debug("Cache warmup skipped for '%s': %s", slug, e)
+
+
 async def warmup_proxy_caches(storage):
-    """Pre-populate tool caches for all active proxies on startup."""
+    """Pre-populate tool caches for all active proxies concurrently."""
     try:
         proxies = await storage.list_proxies()
     except Exception:
         return
-    for proxy in proxies:
-        slug = proxy["slug"]
-        try:
-            engine = await _get_engine(slug, storage)
-            tools = await engine.list_tools(slug)
-            _tools_cache[slug] = (time.time(), tools)
-            log.info("Warmed cache for proxy '%s' (%d tools)", slug, len(tools))
-        except Exception as e:
-            log.debug("Cache warmup skipped for '%s': %s", slug, e)
+    tasks = [_warmup_single_proxy(p["slug"], storage) for p in proxies]
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 # ---------------------------------------------------------------------------
