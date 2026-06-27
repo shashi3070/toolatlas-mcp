@@ -11,6 +11,7 @@ from toolatlas_mcp.api.routes import analytics, dashboard, glossary, graph, prox
 from toolatlas_mcp import __version__
 from toolatlas_mcp.config import settings as app_settings
 from toolatlas_mcp.db import close_db, get_storage, init_db
+from toolatlas_mcp.registry.storage import StorageBackend
 from toolatlas_mcp.proxy.engine import close_all_engines
 from toolatlas_mcp.services.connection_manager import connection_manager
 from toolatlas_mcp.services.ws_manager import ws_manager
@@ -74,7 +75,8 @@ def create_app() -> FastAPI:
 
     _health_task: asyncio.Task[Any] | None = None
     _registry_task: asyncio.Task[Any] | None = None
-    _health_storage = None
+    _warmup_storage = None
+    _background_storages: list[StorageBackend] = []
 
     async def _create_storage():
         if app_settings.storage_type == "json":
@@ -92,30 +94,33 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup():
-        nonlocal _health_task, _health_storage, _registry_task
+        nonlocal _health_task, _warmup_storage, _registry_task
         if app_settings.is_db_backend:
             await init_db()
 
-        _health_storage = await _create_storage()
+        # Each background task gets its own storage (own DB session) to avoid
+        # SQLAlchemy's "concurrent operations are not permitted" error.
+        health_storage = await _create_storage()
+        sync_storage = await _create_storage()
+        _warmup_storage = await _create_storage()
+        _background_storages.extend([health_storage, sync_storage, _warmup_storage])
 
         from toolatlas_mcp.services.health_checker import health_check_loop
-        _health_task = asyncio.create_task(health_check_loop(_health_storage))
+        _health_task = asyncio.create_task(health_check_loop(health_storage))
 
-        # Start registry sync service
         from toolatlas_mcp.services.registry_sync import RegistrySyncService
         _registry_task = asyncio.create_task(
-            RegistrySyncService()._sync_loop(_health_storage, connection_manager)
+            RegistrySyncService()._sync_loop(sync_storage, connection_manager)
         )
 
-        # Warm up proxy tool caches
         from toolatlas_mcp.proxy.server import warmup_proxy_caches
-        await warmup_proxy_caches(_health_storage)
+        await warmup_proxy_caches(_warmup_storage)
 
         log.info("ToolAtlas-MCP started on %s:%s", app_settings.host, app_settings.port)
 
     @app.on_event("shutdown")
     async def shutdown():
-        nonlocal _health_task, _health_storage, _registry_task
+        nonlocal _health_task, _warmup_storage, _registry_task
         if _registry_task:
             _registry_task.cancel()
             try:
@@ -128,9 +133,9 @@ def create_app() -> FastAPI:
                 await _health_task
             except asyncio.CancelledError:
                 pass
-        if _health_storage:
+        for s in _background_storages:
             try:
-                await _health_storage.close()
+                await s.close()
             except Exception:
                 pass
         close_all_engines()
