@@ -87,12 +87,50 @@ async def get_storage() -> AsyncGenerator[StorageBackend, None]:
             yield RegistryRepository(session)
 
 
+async def _get_existing_columns(conn, dialect: str) -> dict[str, set[str]]:
+    existing: dict[str, set[str]] = {}
+    tables = ["servers", "tools", "proxies", "proxy_servers", "proxy_tool_settings", "glossary_terms", "domains", "tool_calls"]
+    if dialect == "sqlite":
+        for table in tables:
+            result = await conn.exec_driver_sql(f"PRAGMA table_info({table});")
+            rows = result.fetchall()
+            existing[table] = {r[1] for r in rows}
+    else:
+        for table in tables:
+            result = await conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = :t;",
+                {"t": table},
+            )
+            rows = result.fetchall()
+            existing[table] = {r[0] for r in rows}
+    return existing
+
+
+async def _migrate_schema(conn, dialect: str):
+    """Add missing columns to existing tables for schema migrations."""
+    existing_columns = await _get_existing_columns(conn, dialect)
+
+    coltype_map = {"sqlite": {"VARCHAR": "VARCHAR", "DATETIME": "DATETIME", "JSON": "JSON"},
+                   "postgresql": {"VARCHAR": "VARCHAR", "DATETIME": "TIMESTAMP", "JSON": "JSON"}}
+    ct = coltype_map.get(dialect, coltype_map["sqlite"])
+
+    migrations = [
+        ("servers", "tool_hash", "VARCHAR"),
+        ("servers", "last_tool_sync", "DATETIME"),
+        ("tool_calls", "events", "JSON"),
+    ]
+    for table, col, coltype in migrations:
+        if col not in existing_columns.get(table, set()):
+            await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {ct[coltype]};")
+
+
 async def init_db():
     engine = _get_engine()
+    dialect = engine.dialect.name
     async with engine.begin() as conn:
         from toolatlas_mcp.registry.models import Base as RegistryBase
         await conn.run_sync(RegistryBase.metadata.create_all)
-    dialect = engine.dialect.name
+        await _migrate_schema(conn, dialect)
     if dialect == "sqlite":
         async with engine.connect() as conn:
             await conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
