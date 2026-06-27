@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
@@ -97,8 +98,8 @@ async def _get_existing_columns(conn, dialect: str) -> dict[str, set[str]]:
             existing[table] = {r[1] for r in rows}
     else:
         for table in tables:
-            result = await conn.exec_driver_sql(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = :t;",
+            result = await conn.execute(
+                text("SELECT column_name FROM information_schema.columns WHERE table_name = :t"),
                 {"t": table},
             )
             rows = result.fetchall()
