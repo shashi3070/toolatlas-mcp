@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import time
 from typing import Any
@@ -10,6 +11,16 @@ from toolatlas_mcp.services.connection_manager import connection_manager
 from toolatlas_mcp.registry.storage import StorageBackend
 
 log = logging.getLogger(__name__)
+
+
+def _truncate(obj, max_str=200, max_list=5):
+    if isinstance(obj, dict):
+        return {k: _truncate(v, max_str, max_list) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_truncate(item, max_str, max_list) for item in obj[:max_list]]
+    elif isinstance(obj, str):
+        return (obj[:max_str] + "...") if len(obj) > max_str else obj
+    return obj
 
 
 def close_all_engines():
@@ -246,10 +257,13 @@ class ProxyEngine:
             ctx["add_event"]("proxy_lookup", f"Proxy '{slug}' resolved", {
                 "proxy_slug": slug, "proxy_name": proxy["name"],
             })
+            alias = setting.get("alias") if setting else None
+            display_name = alias or name
             ctx["add_event"]("tool_resolution",
-                             f"Tool '{name}' resolved to server '{server['name']}'", {
+                             f"Tool '{display_name}' resolved to server '{server['name']}'", {
                 "server": server["name"],
                 "tool_enabled": setting.get("enabled", True) if setting else True,
+                "original_tool_name": original_name,
             })
             if setting and not setting.get("enabled", True):
                 ctx["add_event"]("tool_disabled",
@@ -297,10 +311,10 @@ class ProxyEngine:
                     )
 
             ctx["add_event"]("server_response", f"Response from server '{server['name']}'", {
-                "result_summary": str(result)[:300],
+                "result_summary": _truncate(result),
             })
             ctx["add_event"]("response_returned", "Response forwarded to client", {
-                "result_summary": str(result)[:300],
+                "result_summary": _truncate(result),
             })
 
         # Plugin: after_tool_call
