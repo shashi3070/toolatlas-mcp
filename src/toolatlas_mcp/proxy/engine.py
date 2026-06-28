@@ -206,7 +206,7 @@ class ProxyEngine:
     # ------------------------------------------------------------------
 
     async def call_tool(
-        self, slug: str, name: str, arguments: dict[str, Any],
+        self, slug: str, name: str, arguments: dict[str, Any], meta: dict | None = None,
     ) -> dict[str, Any]:
         proxy = await self.storage.get_proxy_by_slug(slug)
         if not proxy:
@@ -247,12 +247,14 @@ class ProxyEngine:
 
         setting = await self.storage.get_tool_setting(proxy["id"], db_tool["id"])
 
+        trace_id = (meta or {}).get("trace_id")
         async with self.middleware.track(
             tool_name=name,
             proxy_id=proxy["id"],
             tool_id=db_tool["id"],
             server_id=server["id"],
             request_args=arguments,
+            trace_id=trace_id,
         ) as ctx:
             ctx["add_event"]("proxy_lookup", f"Proxy '{slug}' resolved", {
                 "proxy_slug": slug, "proxy_name": proxy["name"],
@@ -286,7 +288,7 @@ class ProxyEngine:
             })
             try:
                 result = await asyncio.wait_for(
-                    client.call_tool(original_name, arguments), timeout=30,
+                    client.call_tool(original_name, arguments, meta=meta), timeout=30,
                 )
             except asyncio.TimeoutError:
                 log.warning(
@@ -303,7 +305,7 @@ class ProxyEngine:
                 try:
                     client = await connection_manager.get_client(server)
                     result = await asyncio.wait_for(
-                        client.call_tool(original_name, arguments), timeout=30,
+                        client.call_tool(original_name, arguments, meta=meta), timeout=30,
                     )
                 except Exception as e2:
                     raise RuntimeError(

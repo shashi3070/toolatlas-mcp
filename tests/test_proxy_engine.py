@@ -310,6 +310,6 @@ async def test_engine_original_name_for_upstream():
                     result = await p_engine.call_tool("orig-name-test", "renamed", {})
 
         assert result == {"content": "ok"}
-        mock_client.call_tool.assert_awaited_once_with("original_tool_name", {})
+        mock_client.call_tool.assert_awaited_once_with("original_tool_name", {}, meta=None)
 
     await engine.dispose()

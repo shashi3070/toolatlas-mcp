@@ -17,6 +17,7 @@ class TrackingContext:
         self.server_id: str | None = None
         self.client_id: str | None = None
         self.request_args: dict | None = None
+        self.trace_id: str | None = None
 
     async def record_success(self, response_summary: str | None = None):
         duration_ms = (time.time() - self.start_time) * 1000
@@ -30,6 +31,7 @@ class TrackingContext:
             duration_ms=duration_ms,
             success=True,
             client_id=self.client_id,
+            trace_id=self.trace_id,
         )
 
     async def record_error(self, error_message: str):
@@ -44,6 +46,7 @@ class TrackingContext:
             success=False,
             error_message=error_message,
             client_id=self.client_id,
+            trace_id=self.trace_id,
         )
 
 
@@ -60,6 +63,7 @@ class TrackerService:
         server_id: str | None = None,
         client_id: str | None = None,
         request_args: dict | None = None,
+        trace_id: str | None = None,
     ) -> AsyncGenerator[TrackingContext, Any]:
         ctx = TrackingContext(self.repo)
         ctx.start_time = time.time()
@@ -69,6 +73,7 @@ class TrackerService:
         ctx.server_id = server_id
         ctx.client_id = client_id
         ctx.request_args = request_args
+        ctx.trace_id = trace_id
         try:
             yield ctx
         except Exception as e:

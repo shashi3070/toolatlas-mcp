@@ -251,9 +251,11 @@ async def proxy_message(slug: str, session_id: str, request: Request):
                 return JSONResponse({"ok": True}, status_code=202)
 
             if method in ("call_tool", "tools/call"):
-                name = body.get("params", {}).get("name", "")
-                arguments = body.get("params", {}).get("arguments", {})
-                result = await engine.call_tool(slug, name, arguments)
+                params = body.get("params", {})
+                name = params.get("name", "")
+                arguments = params.get("arguments", {})
+                meta = params.get("_meta", {})
+                result = await engine.call_tool(slug, name, arguments, meta=meta)
                 _send_to_session(
                     session_id,
                     {"jsonrpc": "2.0", "id": msg_id, "result": result},

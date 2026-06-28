@@ -239,8 +239,11 @@ class MCPClient:
             return resp["result"].get("tools", [])
         raise RuntimeError(f"list_tools failed: {resp.get('error')}")
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        resp = await self.send_request("tools/call", {"name": name, "arguments": arguments})
+    async def call_tool(self, name: str, arguments: dict[str, Any], meta: dict | None = None) -> dict[str, Any]:
+        params = {"name": name, "arguments": arguments}
+        if meta:
+            params["_meta"] = meta
+        resp = await self.send_request("tools/call", params)
         if "result" in resp:
             return resp["result"]
         raise RuntimeError(f"call_tool failed: {resp.get('error')}")
