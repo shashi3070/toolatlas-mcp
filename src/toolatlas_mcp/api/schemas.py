@@ -58,6 +58,7 @@ class ToolResponse(ResponseModel):
     tags: list[str] = Field(default_factory=list)
     domain: list[str] = Field(default_factory=list)
     glossary_term_ids: list[str] = Field(default_factory=list)
+    alias: str | None = None
 
     @field_validator("domain", mode="before")
     @classmethod

@@ -19,6 +19,23 @@ toolatlas start --storage postgres --database-url "postgresql+asyncpg://user:pas
 
 ---
 
+## Documentation
+
+Full documentation is in the [`docs/`](https://github.com/shashi3070/toolatlas-mcp/tree/main/docs) directory.
+
+| Area | Documents |
+|------|-----------|
+| **Plugin System** | [plugin-system.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/plugin-system.md), [plugin-loading.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/plugin-loading.md), [plugin-hooks.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/plugin-hooks.md), [plugin-examples.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/plugin-examples.md), [plugin-testing.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/plugin-testing.md) |
+| **Core System** | [proxy-engine.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/proxy-engine.md), [tool-graph.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/tool-graph.md), [registry.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/registry.md), [architecture.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/architecture.md) |
+| **API & CLI** | [api.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/api.md), [cli.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/cli.md), [configuration.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/configuration.md) |
+| **Operations** | [deploy-under-subpath.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/deploy-under-subpath.md), [troubleshooting.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/troubleshooting.md) |
+| **Development** | [development.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/development.md), [changelog.md](https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/changelog.md) |
+| **Examples** | [examples/](https://github.com/shashi3070/toolatlas-mcp/tree/main/examples) — runnable Python scripts |
+
+> **Tip:** Run `toolatlas docs` from the CLI to find your local copy of the docs (shipped with the installed package).
+
+---
+
 ## Why ToolAtlas?
 
 As MCP adoption grows, teams quickly accumulate hundreds of tools across GitHub, Jira, Confluence, AWS, Databricks, Slack, internal systems, and custom MCP servers. **The challenge is no longer connecting tools — it's understanding them.**
@@ -183,7 +200,7 @@ You should see the CLI help with `start`, `server`, `proxy` commands.
 ### Install from source
 
 ```bash
-git clone https://github.com/anomalyco/toolatlas-mcp
+git clone https://github.com/shashi3070/toolatlas-mcp
 cd toolatlas-mcp
 
 # Python package
@@ -874,7 +891,7 @@ curl -s -X POST "http://localhost:8081/proxy/dev/message/$SESSION_ID" \
 ## Development
 
 ```bash
-git clone https://github.com/anomalyco/toolatlas-mcp
+git clone https://github.com/shashi3070/toolatlas-mcp
 cd toolatlas-mcp
 
 # Python

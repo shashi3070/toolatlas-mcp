@@ -5,6 +5,7 @@ import {
   graphApi, proxiesApi,
   type TraceSummary, type TraceGraphResponse, type CoOccurrenceResponse, type Proxy,
 } from "../api/client";
+import Loading from "../components/Loading";
 
 type Tab = "flow" | "relationships" | "topology";
 
@@ -20,13 +21,14 @@ export default function Graph() {
   const [selectedTrace, setSelectedTrace] = useState<TraceGraphResponse | null>(null);
   const [cooc, setCooc] = useState<CoOccurrenceResponse | null>(null);
   const [proxies, setProxies] = useState<Proxy[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterProxy, setFilterProxy] = useState("");
 
   const networkRef = useRef<HTMLDivElement>(null);
   const networkInstance = useRef<Network | null>(null);
 
   useEffect(() => {
-    proxiesApi.list().then(setProxies).catch(() => null);
+    proxiesApi.list().then(setProxies).catch(() => null).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -134,6 +136,8 @@ export default function Graph() {
       edges: { smooth: { enabled: true, type: "continuous", roundness: 0.2 } },
     } as any);
   }
+
+  if (loading) return <Loading />;
 
   return (
     <div>

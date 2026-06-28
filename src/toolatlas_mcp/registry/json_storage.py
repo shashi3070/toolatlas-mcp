@@ -173,7 +173,15 @@ class JSONStorage(StorageBackend):
         async with self._lock:
             before = len(self._data["servers"])
             self._data["servers"] = [s for s in self._data["servers"] if s["id"] != server_id]
+            deleted_tool_ids = {t["id"] for t in self._data["tools"] if t["server_id"] == server_id}
             self._data["tools"] = [t for t in self._data["tools"] if t["server_id"] != server_id]
+            self._data["proxy_servers"] = [
+                ps for ps in self._data["proxy_servers"] if ps["server_id"] != server_id
+            ]
+            self._data["proxy_tool_settings"] = [
+                pts for pts in self._data["proxy_tool_settings"]
+                if pts["tool_id"] not in deleted_tool_ids
+            ]
             if len(self._data["servers"]) < before:
                 await self._save()
                 return True
@@ -569,7 +577,22 @@ class JSONStorage(StorageBackend):
         durations = [c.get("duration_ms", 0) for c in self._data["calls"] if c.get("success")]
         avg_latency = sum(durations) / len(durations) if durations else 0.0
         tool_counts: dict[str, int] = {}
+        now = datetime.now(timezone.utc)
+        calls_last_minute = 0
         for c in self._data["calls"]:
+            ts = c.get("timestamp")
+            if ts:
+                try:
+                    if isinstance(ts, str):
+                        ts_dt = datetime.fromisoformat(ts)
+                    elif isinstance(ts, datetime):
+                        ts_dt = ts
+                    else:
+                        ts_dt = None
+                    if ts_dt and (now - ts_dt).total_seconds() < 60:
+                        calls_last_minute += 1
+                except (ValueError, TypeError):
+                    pass
             name = c.get("tool_name", "unknown")
             tool_counts[name] = tool_counts.get(name, 0) + 1
         top_tools = sorted(tool_counts.items(), key=lambda x: -x[1])[:20]
@@ -577,6 +600,7 @@ class JSONStorage(StorageBackend):
             "total_calls": total,
             "successful_calls": successful,
             "avg_latency_ms": round(avg_latency, 2),
+            "calls_per_minute": calls_last_minute,
             "top_tools": [{"name": name, "calls": count} for name, count in top_tools],
         }
 

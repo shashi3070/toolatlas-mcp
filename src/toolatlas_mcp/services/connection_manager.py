@@ -114,6 +114,7 @@ class ConnectionManager:
             except Exception as e:
                 log.debug("Error closing MCPClient for %s: %s", server_id, e)
         self._locks.pop(server_id, None)
+        asyncio.ensure_future(plugin_manager.execute("on_server_disconnected", server_id=server_id))
 
 
 connection_manager = ConnectionManager()

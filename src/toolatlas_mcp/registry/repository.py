@@ -398,7 +398,6 @@ class RegistryRepository(StorageBackend):
                 self.db.add(gt)
                 created_terms += 1
             await self.commit()
-        await self.commit()
         return {"domains_created": created_domains, "terms_created": created_terms}
 
     # ---- Tool Calls (tracking) ----
@@ -454,6 +453,7 @@ class RegistryRepository(StorageBackend):
         return [_model_to_dict(c) for c in result.scalars().all()]
 
     async def get_call_stats(self) -> dict[str, Any]:
+        from datetime import datetime, timedelta, timezone
         from sqlalchemy import func
 
         total = await self.db.execute(select(func.count(ToolCall.id)))
@@ -469,11 +469,17 @@ class RegistryRepository(StorageBackend):
             .order_by(func.count(ToolCall.id).desc())
             .limit(20)
         )
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+        calls_per_minute = await self.db.execute(
+            select(func.count(ToolCall.id))
+            .where(ToolCall.timestamp >= cutoff)
+        )
 
         return {
             "total_calls": total.scalar() or 0,
             "successful_calls": successful.scalar() or 0,
             "avg_latency_ms": round(avg_latency.scalar() or 0.0, 2),
+            "calls_per_minute": calls_per_minute.scalar() or 0,
             "top_tools": [{"name": row[0], "calls": row[1]} for row in tool_counts.all()],
         }
 

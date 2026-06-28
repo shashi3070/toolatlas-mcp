@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, Pencil, Search, X } from "lucide-react";
 import { toolsApi, glossaryApi, serversApi, type Tool, type Domain, type Server } from "../api/client";
+import Loading from "../components/Loading";
 
 export default function Tools() {
   const [tools, setTools] = useState<Tool[]>([]);
+  const [loading, setLoading] = useState(true);
   const [servers, setServers] = useState<Server[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [filterServer, setFilterServer] = useState("");
@@ -15,7 +17,7 @@ export default function Tools() {
     toolsApi.list(),
     serversApi.list(),
     glossaryApi.listDomains().catch(() => []),
-  ]).then(([t, s, d]) => { setTools(t); setServers(s); setDomains(d); });
+  ]).then(([t, s, d]) => { setTools(t); setServers(s); setDomains(d); }).finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
 
@@ -23,6 +25,8 @@ export default function Tools() {
     await toolsApi.update(id, data);
     load();
   };
+
+  if (loading) return <Loading />;
 
   const filtered = tools.filter((t) => {
     if (filterServer && t.server_id !== filterServer) return false;

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from toolatlas_mcp.proxy.server import invalidate_proxy_cache
+from toolatlas_mcp.proxy.server import invalidate_proxy_cache, remove_engine
 from toolatlas_mcp.api.schemas import (
     ProxyCreate,
     ProxyDesignerResponse,
@@ -60,6 +60,7 @@ async def update_proxy(proxy_id: str, body: ProxyUpdate, storage: StorageBackend
             raise HTTPException(400, f"Slug '{kwargs['slug']}' already in use")
     proxy = await storage.update_proxy(proxy_id, **kwargs)
     invalidate_proxy_cache(old_slug)
+    remove_engine(old_slug)
     if "slug" in kwargs:
         invalidate_proxy_cache(kwargs["slug"])
     return ProxyResponse(**proxy)
@@ -71,6 +72,7 @@ async def delete_proxy(proxy_id: str, storage: StorageBackend = Depends(get_stor
     if not proxy:
         raise HTTPException(404, "Proxy not found")
     invalidate_proxy_cache(proxy["slug"])
+    remove_engine(proxy["slug"])
     await storage.delete_proxy(proxy_id)
     return {"ok": True}
 
@@ -150,6 +152,7 @@ async def get_proxy_tools(proxy_id: str, storage: StorageBackend = Depends(get_s
                 server_id=t.get("server_id", ""),
                 name=setting.get("alias") if setting and setting.get("alias") else t.get("name", ""),
                 original_name=t.get("original_name", ""),
+                alias=setting.get("alias") if setting else None,
                 description=display_desc,
                 input_schema=t.get("input_schema", {}),
                 enabled=setting.get("enabled") if setting else t.get("enabled", True),
@@ -174,6 +177,7 @@ async def update_tool_setting(
         raise HTTPException(404, "Tool not found")
     kwargs = body.model_dump(exclude_unset=True)
     setting = await storage.upsert_tool_setting(proxy_id, tool_id, **kwargs)
+    invalidate_proxy_cache(proxy["slug"])
     return {
         "proxy_id": proxy_id,
         "tool_id": tool_id,

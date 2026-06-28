@@ -61,6 +61,12 @@ class ProxyEngine:
         if not proxy:
             raise ValueError(f"Proxy '{slug}' not found")
 
+        # Plugin: before_list_tools
+        ctx = PluginContext(slug=slug, method="list_tools")
+        short_circuit = await plugin_manager.execute_first("on_before_list_tools", ctx=ctx)
+        if short_circuit is not None:
+            return short_circuit
+
         servers = await self.storage.get_proxy_servers(proxy["id"])
 
         tools_map: dict[str, dict[str, Any]] = {}
@@ -97,11 +103,10 @@ class ProxyEngine:
 
                 for rt in remote_tools:
                     tool_name = rt.get("name", "")
-                    self._tool_to_server[tool_name] = server["id"]
-                    self._tool_info[tool_name] = rt
+                    server_id = server["id"]
 
                     db_tool = await self.storage.upsert_tool(
-                        server_id=server["id"],
+                        server_id=server_id,
                         name=tool_name,
                         description=rt.get("description", ""),
                         input_schema=rt.get("inputSchema", {}),
@@ -127,6 +132,16 @@ class ProxyEngine:
                     display_name = (
                         setting.get("alias") if setting and setting.get("alias") else db_tool["name"]
                     )
+
+                    # Detect collision: same display_name from a different server
+                    existing_server = self._tool_to_server.get(display_name)
+                    if existing_server is not None and existing_server != server_id:
+                        server_name = server.get("name", server_id[:8])
+                        display_name = f"{tool_name} ({server_name})"
+
+                    self._tool_to_server[display_name] = server_id
+                    self._tool_info[display_name] = rt
+
                     display_desc = (
                         setting.get("custom_description") or db_tool.get("description")
                         if setting else db_tool.get("description", "")
@@ -156,7 +171,7 @@ class ProxyEngine:
                             if display_desc else "\n".join(enrichment)
                         )
 
-                    tools_map[tool_name] = {
+                    tools_map[display_name] = {
                         "name": display_name,
                         "description": display_desc,
                         "inputSchema": rt.get("inputSchema", {}),
@@ -211,9 +226,10 @@ class ProxyEngine:
             )
 
         remote_tool = self._tool_info.get(name, {})
+        original_name = remote_tool.get("name", name)
         db_tool = await self.storage.upsert_tool(
             server_id=server["id"],
-            name=name,
+            name=original_name,
             description=remote_tool.get("description", ""),
             input_schema=remote_tool.get("inputSchema", {}),
         )
@@ -256,7 +272,7 @@ class ProxyEngine:
             })
             try:
                 result = await asyncio.wait_for(
-                    client.call_tool(name, arguments), timeout=30,
+                    client.call_tool(original_name, arguments), timeout=30,
                 )
             except asyncio.TimeoutError:
                 log.warning(
@@ -273,7 +289,7 @@ class ProxyEngine:
                 try:
                     client = await connection_manager.get_client(server)
                     result = await asyncio.wait_for(
-                        client.call_tool(name, arguments), timeout=30,
+                        client.call_tool(original_name, arguments), timeout=30,
                     )
                 except Exception as e2:
                     raise RuntimeError(

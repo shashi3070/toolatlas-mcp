@@ -80,6 +80,12 @@ def invalidate_proxy_cache(slug: str):
     asyncio.ensure_future(plugin_manager.execute("on_cache_invalidated", slug=slug))
 
 
+def remove_engine(slug: str):
+    """Remove a proxy engine and its lock (e.g. on slug change or proxy deletion)."""
+    _engines.pop(slug, None)
+    _engine_locks.pop(slug, None)
+
+
 def invalidate_all_proxy_caches():
     _tools_cache.clear()
 

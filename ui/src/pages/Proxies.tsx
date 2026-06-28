@@ -2,18 +2,22 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Trash2, ExternalLink, Search, X } from "lucide-react";
 import { proxiesApi, type Proxy } from "../api/client";
+import Loading from "../components/Loading";
 
 export default function Proxies() {
   const [proxies, setProxies] = useState<Proxy[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
   const [search, setSearch] = useState("");
 
-  const load = () => proxiesApi.list().then(setProxies);
+  const load = () => proxiesApi.list().then(setProxies).finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
+
+  if (loading) return <Loading />;
 
   const filtered = proxies.filter((p) => {
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.slug.toLowerCase().includes(search.toLowerCase())) return false;

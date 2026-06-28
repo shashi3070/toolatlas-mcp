@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "toolatlas-mcp"
-version = "3.0.4"
+version = "3.0.7"
 description = "ToolAtlas — Discover, Govern, and Optimize MCP Tools"
 readme = "README.md"
 license = "MIT"
@@ -61,9 +61,9 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/anomalyco/toolatlas-mcp"
-Repository = "https://github.com/anomalyco/toolatlas-mcp"
-Issues = "https://github.com/anomalyco/toolatlas-mcp/issues"
+Homepage = "https://github.com/shashi3070/toolatlas-mcp"
+Repository = "https://github.com/shashi3070/toolatlas-mcp"
+Issues = "https://github.com/shashi3070/toolatlas-mcp/issues"
 
 [project.scripts]
 toolatlas = "toolatlas_mcp.__main__:main"
@@ -73,7 +73,7 @@ where = ["src"]
 include = ["toolatlas_mcp*"]
 
 [tool.setuptools.package-data]
-toolatlas_mcp = ["ui/dist/**/*"]
+toolatlas_mcp = ["ui/dist/**/*", "docs/**/*", "examples/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

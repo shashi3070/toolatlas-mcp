@@ -1,3 +1,10 @@
 include README.md LICENSE
 recursive-include screenshots *.png
 recursive-include src/toolatlas_mcp/ui/dist *
+
+# Canonical docs/examples (development)
+recursive-include docs *
+recursive-include examples *
+# Package copies (PyPI wheel via package-data)
+recursive-include src/toolatlas_mcp/docs *
+recursive-include src/toolatlas_mcp/examples *

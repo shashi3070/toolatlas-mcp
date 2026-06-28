@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Server, Play, CheckCircle, XCircle, Clock } from "lucide-react";
+import { ArrowLeft, Server, Play, CheckCircle, XCircle, Clock, Copy, ChevronDown, ChevronRight } from "lucide-react";
 import { toolsApi, glossaryApi, type Tool, type Domain, type GlossaryTerm } from "../api/client";
+import Loading from "../components/Loading";
 
 export default function ToolDetail() {
   const { id } = useParams<{ id: string }>();
@@ -92,9 +93,7 @@ export default function ToolDetail() {
     }
   };
 
-  if (loading) {
-    return <div className="text-slate-400 text-center py-12">Loading...</div>;
-  }
+  if (loading) return <Loading />;
 
   if (!tool) {
     return <div className="text-red-500 text-center py-12">Tool not found</div>;
@@ -298,10 +297,8 @@ export default function ToolDetail() {
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                     {testResult.error}
                   </div>
-                ) : (
-                  <pre className="bg-green-50 border border-green-200 text-slate-800 text-xs rounded-lg p-3 overflow-x-auto max-h-60">
-                    {JSON.stringify(testResult.result, null, 2)}
-                  </pre>
+                ) : testResult.result && (
+                  <ToolResult data={testResult.result} />
                 )}
               </div>
             )}
@@ -389,6 +386,87 @@ export default function ToolDetail() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="p-1 hover:text-blue-600 shrink-0"
+      title={copied ? "Copied!" : "Copy"}
+    >
+      {copied ? <CheckCircle size={14} className="text-green-500" /> : <Copy size={14} className="text-slate-400" />}
+    </button>
+  );
+}
+
+function ToolResult({ data }: { data: Record<string, unknown> }) {
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const [showRaw, setShowRaw] = useState(false);
+
+  const content = data.content as Array<{ type: string; text?: string; resource?: Record<string, unknown> }> | undefined;
+
+  return (
+    <div className="space-y-3">
+      {data.structuredContent ? (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Result</span>
+            <CopyButton text={JSON.stringify(data.structuredContent, null, 2)} />
+          </div>
+          <pre className="bg-green-50 border border-green-200 text-slate-800 text-xs rounded-lg p-3 overflow-x-auto max-h-60">
+            {JSON.stringify(data.structuredContent, null, 2)}
+          </pre>
+        </div>
+      ) : null}
+
+      {content?.map((item, i) => (
+        <div key={i} className="border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border-b">
+            <span className="text-xs font-medium text-slate-500 uppercase">{item.type}</span>
+            <CopyButton text={item.text || JSON.stringify(item, null, 2)} />
+          </div>
+          {item.type === "text" && item.text ? (
+            <div className="p-3 text-xs">
+              <pre className="whitespace-pre-wrap font-mono leading-relaxed max-h-[500px] overflow-y-auto">
+                {expanded[i] ? item.text : item.text.length > 1000 ? item.text.slice(0, 1000) + "..." : item.text}
+              </pre>
+              {item.text.length > 1000 && (
+                <button
+                  onClick={() => setExpanded((prev) => ({ ...prev, [i]: !prev[i] }))}
+                  className="text-blue-600 hover:text-blue-800 text-xs mt-1"
+                >
+                  {expanded[i] ? "Show less" : "Show more"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <pre className="p-3 text-xs overflow-x-auto max-h-60">
+              {JSON.stringify(item, null, 2)}
+            </pre>
+          )}
+        </div>
+      ))}
+
+      <button
+        onClick={() => setShowRaw(!showRaw)}
+        className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+      >
+        {showRaw ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        Raw Response
+      </button>
+      {showRaw && (
+        <pre className="bg-slate-50 border text-slate-800 text-xs rounded-lg p-3 overflow-x-auto max-h-96">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }

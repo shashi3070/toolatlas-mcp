@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Wifi, RefreshCw, CheckCircle, XCircle, Search, X } from "lucide-react";
 import { serversApi, type Server, type Tool } from "../api/client";
+import Loading from "../components/Loading";
 
 export default function Servers() {
   const [servers, setServers] = useState<Server[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Server | null>(null);
   const [name, setName] = useState("");
@@ -21,9 +23,11 @@ export default function Servers() {
   const [search, setSearch] = useState("");
   const [filterTransport, setFilterTransport] = useState("");
 
-  const load = () => serversApi.list().then(setServers);
+  const load = () => serversApi.list().then(setServers).finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
+
+  if (loading) return <Loading />;
 
   const filtered = servers.filter((s) => {
     if (filterTransport && s.transport !== filterTransport) return false;

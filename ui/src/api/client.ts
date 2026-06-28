@@ -54,6 +54,7 @@ export type Tool = {
   tags: string[];
   domain: string[];
   glossary_term_ids: string[];
+  alias?: string;
   server_name?: string;
 };
 

@@ -1,18 +1,24 @@
 import { useEffect, useState, useRef } from "react";
 import { Plus, Pencil, Trash2, Search, X, Upload, Download } from "lucide-react";
 import { glossaryApi, type GlossaryTerm, type Domain } from "../api/client";
+import Loading from "../components/Loading";
 
 export default function Glossary() {
   const [terms, setTerms] = useState<GlossaryTerm[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"domains" | "terms">("domains");
 
   const load = () => {
-    glossaryApi.listTerms().then(setTerms);
-    glossaryApi.listDomains().then(setDomains);
+    Promise.all([
+      glossaryApi.listTerms().then(setTerms),
+      glossaryApi.listDomains().then(setDomains),
+    ]).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
+
+  if (loading) return <Loading />;
 
   return (
     <div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
 import { analyticsApi, proxiesApi, toolsApi, type CallDetail, type CallRecord, type CallStats, type Proxy, type Tool } from "../api/client";
+import Loading from "../components/Loading";
 
 const EVENT_ICONS: Record<string, string> = {
   request_received: "📥",
@@ -110,15 +111,18 @@ export default function Analytics() {
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [allTools, setAllTools] = useState<Tool[]>([]);
 
+  const [loading, setLoading] = useState(true);
   const [filterProxy, setFilterProxy] = useState("");
   const [filterTool, setFilterTool] = useState("");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    analyticsApi.stats().then(setStats).catch(() => null);
-    analyticsApi.calls({ limit: 50 }).then(setCalls).catch(() => null);
-    proxiesApi.list().then(setProxies).catch(() => null);
-    toolsApi.list().then(setAllTools).catch(() => null);
+    Promise.all([
+      analyticsApi.stats().then(setStats).catch(() => null),
+      analyticsApi.calls({ limit: 50 }).then(setCalls).catch(() => null),
+      proxiesApi.list().then(setProxies).catch(() => null),
+      toolsApi.list().then(setAllTools).catch(() => null),
+    ]).finally(() => setLoading(false));
   }, []);
 
   const filtered = calls.filter((c) => {
@@ -127,6 +131,8 @@ export default function Analytics() {
     if (search && !c.tool_name.toLowerCase().includes(search.toLowerCase()) && !(c.error_message || "").toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  if (loading) return <Loading />;
 
   return (
     <div>

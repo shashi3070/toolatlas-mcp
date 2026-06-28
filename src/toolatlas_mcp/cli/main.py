@@ -1,11 +1,13 @@
 import logging
 import os
 import socket
+import webbrowser
 from pathlib import Path
 
 import typer
 import uvicorn
 from rich.console import Console
+from rich.table import Table
 
 from toolatlas_mcp.config import settings
 from toolatlas_mcp.registry.storage import get_data_dir
@@ -15,6 +17,8 @@ app = typer.Typer(
     help="ToolAtlas — Discover, Govern, and Optimize MCP Tools",
 )
 console = Console()
+
+REPO = "https://github.com/shashi3070/toolatlas-mcp"
 
 
 def _port_file() -> Path:
@@ -104,6 +108,54 @@ def start(
         factory=True,
         log_level=settings.log_level.lower(),
     )
+
+
+@app.command()
+def docs(
+    open_browser: bool = typer.Option(
+        False, "--open", "-o", help="Open the documentation in your browser"
+    ),
+):
+    """Show available documentation and examples."""
+    here = Path(__file__).resolve().parent.parent
+
+    candidates = [
+        ("installed package", here / "docs"),
+        ("repo root", here.parent.parent / "docs"),
+    ]
+    table = Table(title="ToolAtlas Documentation")
+    table.add_column("Source", style="cyan")
+    table.add_column("Path")
+    table.add_column("Available")
+
+    docs_local = None
+    examples_local = None
+
+    for label, path in candidates:
+        docs_ok = (path).is_dir()
+        table.add_row(label, str(path), "[green]Yes[/]" if docs_ok else "[red]No[/]")
+        if docs_ok and docs_local is None:
+            docs_local = path
+            examples_local = path.parent / "examples"
+
+    console.print(table)
+    console.print()
+
+    if docs_local:
+        console.print(f"[bold]Docs:[/]     {docs_local}")
+        if examples_local and examples_local.is_dir():
+            console.print(f"[bold]Examples:[/] {examples_local}")
+        console.print(f"[bold]Online:[/]  {REPO}/tree/main/docs")
+    else:
+        console.print(f"[yellow]Docs not found locally. View online:[/]")
+        console.print(f"  {REPO}/tree/main/docs")
+
+    if open_browser and docs_local:
+        index = docs_local / "README.md"
+        if index.is_file():
+            webbrowser.open(str(index.resolve()))
+        else:
+            webbrowser.open(str(docs_local.resolve()))
 
 
 @app.callback()

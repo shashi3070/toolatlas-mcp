@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Link2, Unlink, ToggleLeft, ToggleRight, X, Search } from "lucide-react";
 import { proxiesApi, serversApi, type Server, type Tool } from "../api/client";
+import Loading from "../components/Loading";
 
 export default function ProxyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -67,7 +68,12 @@ export default function ProxyDetail() {
     load();
   };
 
-  if (!proxy) return <p className="text-slate-400">Loading...</p>;
+  const updateAlias = async (toolId: string, alias: string) => {
+    await proxiesApi.updateToolSetting(id!, toolId, { alias });
+    load();
+  };
+
+  if (!proxy) return <Loading />;
 
   const unlinked = allServers.filter((s) => !linked.find((l) => l.id === s.id));
 
@@ -129,6 +135,7 @@ export default function ProxyDetail() {
           <thead>
             <tr className="border-b bg-slate-50 text-left">
               <th className="px-4 py-3 font-medium">Name</th>
+              <th className="px-4 py-3 font-medium">Alias</th>
               <th className="px-4 py-3 font-medium">Server</th>
               <th className="px-4 py-3 font-medium">Description</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -138,8 +145,22 @@ export default function ProxyDetail() {
           <tbody>
             {tools.map((t) => (
               <tr key={t.id} className="border-b hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium">{t.name}</td>
-                <td className="px-4 py-3 text-slate-600">{t.server_name}</td>
+                <td className="px-4 py-3">
+                  <div className="font-medium text-sm">{t.original_name}</div>
+                  <div className="text-xs text-slate-400">{t.server_name}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <input
+                    defaultValue={t.alias || ""}
+                    placeholder="(same as name)"
+                    onBlur={(e) => {
+                      const val = e.target.value.trim();
+                      if (val !== (t.alias || "")) updateAlias(t.id, val);
+                    }}
+                    className="w-full border-transparent hover:border-slate-200 focus:border-slate-300 rounded px-1 py-0.5 text-sm font-mono"
+                  />
+                </td>
+                <td className="px-4 py-3 text-slate-600 text-sm">{t.server_name}</td>
                 <td className="px-4 py-3 text-slate-600 max-w-xs truncate">
                   <input
                     defaultValue={t.description}
@@ -162,7 +183,7 @@ export default function ProxyDetail() {
               </tr>
             ))}
             {tools.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No tools available</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No tools available</td></tr>
             )}
           </tbody>
         </table>
