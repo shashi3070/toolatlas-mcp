@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from toolatlas_mcp.api.routes import analytics, dashboard, glossary, graph, proxies, search, servers, settings, tools
@@ -69,7 +70,19 @@ def create_app() -> FastAPI:
     ui_dirs.append(Path(__file__).parent.parent / "ui" / "dist")
     for p in ui_dirs:
         if p.exists() and (p / "index.html").exists():
-            app.mount("/", StaticFiles(directory=str(p), html=True), name="ui")
+            _index_html = (p / "index.html").read_text()
+            assets_dir = p / "assets"
+            if assets_dir.exists():
+                app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="ui_assets")
+            @app.get("/{full_path:path}", include_in_schema=False)
+            async def serve_spa(full_path: str = ""):
+                if full_path.startswith("api/"):
+                    return HTMLResponse(status_code=404)
+                html = _index_html.replace(
+                    "</head>",
+                    f'<script>window.__TOOLATLAS_BASE_PATH__ = "{app_settings.base_path}";</script></head>',
+                )
+                return HTMLResponse(html)
             log.info("Serving UI from %s", p)
             break
 

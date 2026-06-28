@@ -385,8 +385,9 @@ Go to the **Analytics** page in the web UI to see:
 | `toolatlas start --database-url "postgresql+asyncpg://..."` | Set database URL directly (any SQLAlchemy dialect) |
 | `toolatlas start --data-dir ./my-data` | Custom data directory |
 | `toolatlas start --reload` | Start with auto-reload (development) |
+| `toolatlas start --base-path /toolatlas` | Start with reverse proxy base path prefix |
 
-All flags: `--port`, `--host`, `--storage` (json/sqlite/postgres), `--database-url`, `--data-dir`, `--reload`. Environment variables are still supported with `TOOLATLAS_` prefix and take precedence over defaults. You can also use a `.env` file in the working directory to set any `TOOLATLAS_*` variable.
+All flags: `--port`, `--host`, `--storage` (json/sqlite/postgres), `--database-url`, `--data-dir`, `--base-path`, `--reload`. Environment variables are still supported with `TOOLATLAS_` prefix and take precedence over defaults. You can also use a `.env` file in the working directory to set any `TOOLATLAS_*` variable.
 
 ---
 
@@ -727,41 +728,20 @@ app = Flask(__name__)
 
 **Recommended for Flask:** Run ToolAtlas as a separate uvicorn process behind the same nginx, routing `/toolatlas/*` to it. Or migrate your Flask app to FastAPI to get native sub-app mounting.
 
-### SPA Base URL Patching
+### SPA Base URL Configuration
 
-The ToolAtlas SPA is a Vite/React build that hardcodes its API base URL and React Router basename as empty strings. When mounted under a prefix, these must be patched at runtime.
+The ToolAtlas SPA reads the base path at runtime from `window.__TOOLATLAS_BASE_PATH__`, which is injected by the backend into the served `index.html`. Set `TOOLATLAS_BASE_PATH` (or use `--base-path`) to configure it:
 
-Add this startup code to patch the minified JS bundle:
+```bash
+# Environment variable
+export TOOLATLAS_BASE_PATH=/toolatlas
+toolatlas start
 
-```python
-import re
-import glob
-
-# Find the JS bundle
-import toolatlas_mcp as _ta_pkg
-_ta_root = re.sub(r"/?toolatlas_mcp/?$", "", _ta_pkg.__path__[0])
-_js_paths = []
-for _p in [_ta_root + "/toolatlas_mcp/ui/dist/assets", _ta_root + "/ui/dist/assets"]:
-    _js_paths.extend(glob.glob(_p + "/*.js"))
-
-# Patch paths for subpath deployment (e.g., /toolatlas)
-prefix = "/toolatlas"
-for _jsf in _js_paths:
-    try:
-        with open(_jsf) as _f:
-            _c = _f.read()
-        _new_c = (
-            _c.replace('pv=""', f'pv="{prefix}"')      # Axios baseURL
-              .replace('Tv=""', f'Tv="{prefix}"')       # React Router basename
-        )
-        if _new_c != _c:
-            with open(_jsf, "w") as _f:
-                _f.write(_new_c)
-    except Exception:
-        pass
+# Or CLI flag
+toolatlas start --base-path /toolatlas
 ```
 
-**Why this is needed:** The SPA is built with `VITE_API_BASE_URL=""` and `basename=""`. Without patching, API calls go to `/api/...` (404) and routes fail to match under the prefix.
+Both the Axios API client and React Router automatically use this value. **No JS bundle patching is required.**
 
 ### Reverse Proxy (nginx)
 
@@ -807,9 +787,8 @@ open http://localhost:5100/toolatlas/
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| Blank page, no errors | React Router basename not patched | Run the JS patching code before mount |
-| API calls returning 404 | Axios baseURL not patched | Check `pv=""` was replaced |
-| API calls returning data but blank page | Router basename not patched | Check `Tv=""` was replaced |
+| Blank page, no errors | React Router basename not configured | Set `TOOLATLAS_BASE_PATH` to match the reverse proxy prefix |
+| API calls returning 404 | Axios baseURL not configured | Set `TOOLATLAS_BASE_PATH` to match the reverse proxy prefix |
 | Data lost after restart | No persistent volume mounted | Set `TOOLATLAS_DATA_DIR` to a persisted path |
 | SQLite file present even with JSON storage | ToolAtlas initializes both; safe to ignore or delete `.db` file after shutdown | — |
 
@@ -819,7 +798,7 @@ open http://localhost:5100/toolatlas/
 |------|---------|
 | `~/.toolatlas/data.json` | Default JSON data file |
 | `~/.toolatlas/toolatlas.db` | SQLite DB (created even in JSON mode, can be deleted) |
-| `site-packages/toolatlas_mcp/ui/dist/assets/index-*.js` | SPA JS bundle that needs patching |
+| `site-packages/toolatlas_mcp/ui/dist/index.html` | SPA entry point (base path injected at runtime, no patching needed) |
 
 ### Notes
 

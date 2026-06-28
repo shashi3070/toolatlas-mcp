@@ -47,6 +47,7 @@ def start(
     data_dir: str = typer.Option(None, "--data-dir", help="Data directory for databases and config"),
     database_url: str = typer.Option(None, "--database-url", help="Database connection URL (e.g. postgresql+asyncpg://user:pass@host:5432/dbname)"),
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload"),
+    base_path: str = typer.Option("", "--base-path", help="Base path for reverse proxy (e.g. /toolatlas)"),
 ):
     if data_dir:
         os.environ["TOOLATLAS_DATA_DIR"] = data_dir
@@ -88,6 +89,10 @@ def start(
         except ImportError:
             console.print("[red]The 'asyncpg' package is required for PostgreSQL. Install with: pip install toolatlas-mcp[postgres][/]")
             raise typer.Exit(code=1)
+
+    if base_path:
+        os.environ["TOOLATLAS_BASE_PATH"] = base_path
+        settings.base_path = base_path
 
     host_val = host or settings.host
     if port:

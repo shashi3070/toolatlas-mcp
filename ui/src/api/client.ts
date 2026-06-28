@@ -1,6 +1,11 @@
 import axios from "axios";
 
-const basePath = import.meta.env.VITE_BASE_PATH || "";
+declare global {
+  interface Window {
+    __TOOLATLAS_BASE_PATH__?: string;
+  }
+}
+const basePath = window.__TOOLATLAS_BASE_PATH__ || import.meta.env.VITE_BASE_PATH || "";
 const api = axios.create({ baseURL: `${basePath}/api` });
 
 export type Server = {
