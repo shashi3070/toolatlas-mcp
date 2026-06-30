@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from toolatlas_mcp.plugin.base import Plugin, PluginContext
+from toolatlas_mcp.plugin.base import Plugin, PluginAbortError, PluginContext
 
 log = logging.getLogger(__name__)
 
@@ -24,11 +24,15 @@ class PluginManager:
     def plugins(self) -> list[Plugin]:
         return list(self._plugins)
 
+    def _sorted(self) -> list[Plugin]:
+        return sorted(self._plugins, key=lambda p: p.priority)
+
     async def register(self, plugin: Plugin):
         """Register and start a single plugin instance."""
         await plugin.startup()
         self._plugins.append(plugin)
-        log.info("Plugin registered: %s", plugin.name or type(plugin).__name__)
+        self._plugins.sort(key=lambda p: p.priority)
+        log.info("Plugin registered: %s (priority=%d)", plugin.name or type(plugin).__name__, plugin.priority)
 
     async def load_from_entry_point(self, dotted_path: str):
         """Import and register a plugin by dotted module path.
@@ -72,20 +76,22 @@ class PluginManager:
     async def execute(self, hook: str, **kwargs: Any) -> list[Any]:
         """Call *hook* on every registered plugin.  Returns list of results."""
         results: list[Any] = []
-        for plugin in self._plugins:
+        for plugin in self._sorted():
             method = getattr(plugin, hook, None)
             if method is None:
                 continue
             try:
                 result = await method(**kwargs)
                 results.append(result)
+            except PluginAbortError:
+                raise
             except Exception as e:
                 log.error("Plugin %s hook %s error: %s", plugin.name or type(plugin).__name__, hook, e)
         return results
 
     async def execute_first(self, hook: str, **kwargs: Any) -> Any | None:
         """Call *hook* until the first non-None result is returned."""
-        for plugin in self._plugins:
+        for plugin in self._sorted():
             method = getattr(plugin, hook, None)
             if method is None:
                 continue
@@ -93,6 +99,8 @@ class PluginManager:
                 result = await method(**kwargs)
                 if result is not None:
                     return result
+            except PluginAbortError:
+                raise
             except Exception as e:
                 log.error("Plugin %s hook %s error: %s", plugin.name or type(plugin).__name__, hook, e)
         return None

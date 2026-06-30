@@ -428,7 +428,7 @@ The `data.json` file is saved to the same data directory as the SQLite database.
 
 ### 🔌 Plugin System
 
-ToolAtlas v3.0 ships with a hook-based plugin architecture. Plugins can intercept and extend every major lifecycle event.
+ToolAtlas v4.0 ships with an advanced hook-based plugin architecture. Plugins can intercept and extend every major lifecycle event.
 
 **Built-in plugins:**
 
@@ -441,10 +441,12 @@ ToolAtlas v3.0 ships with a hook-based plugin architecture. Plugins can intercep
 
 | Hook | Fires | Use case |
 |------|-------|----------|
-| `on_before_list_tools` | Before listing tools for a proxy | Modify or filter tool list |
+| `on_before_list_tools` | Before listing tools for a proxy | **Abort** or short-circuit tool listing |
 | `on_after_list_tools` | After listing | Log results, inject extra tools |
-| `on_before_tool_call` | Before executing a tool | Validate arguments, audit |
+| `on_tool_filter` | Before returning tool list | **Hide** sensitive tools per caller |
+| `on_before_tool_call` | Before executing a tool | Validate arguments, **authorize**, rate limit |
 | `on_after_tool_call` | After tool execution | Record results, metrics |
+| `on_before_response_return` | Just before response sent to client | **Redact**, modify, or block the response |
 | `on_before_cache_lookup` | Before cache read | Return cached data early |
 | `on_after_cache_lookup` | After cache read | Track hit/miss stats |
 | `on_cache_invalidated` | When cache is cleared | Propagate invalidation to Redis |
@@ -452,7 +454,6 @@ ToolAtlas v3.0 ships with a hook-based plugin architecture. Plugins can intercep
 | `on_tool_updated` | Registry sync detects changes | Re-index |
 | `on_tool_removed` | A tool is deleted from a server | Clean up |
 | `on_server_connected` | A new MCP client connects | Tag connections |
-| `on_startup` / `on_shutdown` | Server lifecycle | Initialize / teardown resources |
 
 **Enable plugins:**
 
@@ -469,19 +470,140 @@ toolatlas start
 2. Directories listed in `TOOLATLAS_PLUGIN_DIRS`
 3. Module paths listed in `TOOLATLAS_PLUGINS`
 
-**Write a custom plugin:**
+---
+
+### 🛑 PluginAbortError — Block Requests from Plugins
+
+Raise `PluginAbortError` in `on_before_tool_call`, `on_before_list_tools`, or `on_before_response_return` to abort the operation. ToolAtlas converts this to an MCP error (`-32001`) returned to the client.
 
 ```python
-from toolatlas_mcp.plugin.base import Plugin, PluginContext
+from toolatlas_mcp.plugin import Plugin, PluginAbortError, PluginContext
+
+class RateLimiterPlugin(Plugin):
+    name = "rate_limiter"
+
+    async def on_before_tool_call(self, ctx: PluginContext) -> None:
+        if self._is_limited(ctx.tool_name):
+            raise PluginAbortError(f"Rate limit exceeded for '{ctx.tool_name}'")
+```
+
+Normal exceptions (e.g. `ValueError`, `RuntimeError`) are caught, logged, and swallowed — they **do not** block the request. Only `PluginAbortError` propagates.
+
+---
+
+### 🎯 Plugin Priority Ordering
+
+Set `priority` on your plugin class to control execution order. Lower values run first.
+
+| Priority | Plugin Type | Example |
+|----------|-------------|---------|
+| `-100` | Authentication | Validate API keys first |
+| `-50` | Authorization / Governance | ABAC, RBAC checks |
+| `0` | Observability (default) | `MetricsPlugin`, audit logger |
+| `50` | Rate Limiting | Check limits after auth |
+| `100` | Cache | `CachePlugin` (latest possible) |
+
+```python
+class GovernancePlugin(Plugin):
+    name = "governance"
+    priority = -50  # runs before metrics
+```
+
+---
+
+### 🧪 PluginContext Identity Fields
+
+`PluginContext` now carries caller identity and routing context from the `_meta` protocol:
+
+| Field | Source | Description |
+|-------|--------|-------------|
+| `client_id` | `_meta.client_id` | Calling client (e.g. "chatbot-v3") |
+| `user_id` | `_meta.user_id` | Authenticated user |
+| `org_id` | `_meta.org_id` | Organization |
+| `tenant_id` | `_meta.tenant_id` | Tenant within org |
+| `proxy_id` | Internal | Proxy that received the call |
+| `proxy_name` | Internal | Proxy display name |
+| `server_name` | Internal | Upstream MCP server name |
+| `meta` | `_meta` (full dict) | Raw metadata from request |
+
+---
+
+### 🔍 Tool Filter Hook
+
+`on_tool_filter` lets plugins hide tools from the returned tool list. Useful for governance:
+
+```python
+class GovernancePlugin(Plugin):
+    name = "governance"
+    priority = -50
+
+    SENSITIVE_TOOLS = {"delete_repo", "admin_exec"}
+
+    async def on_tool_filter(self, ctx: PluginContext, tools: list[dict]) -> list[dict]:
+        return [t for t in tools if t["name"] not in self.SENSITIVE_TOOLS]
+```
+
+---
+
+### 📝 Response Modification Hook
+
+`on_before_response_return` fires just before the response is sent to the client. Plugins can modify or redact the result:
+
+```python
+class DLPPlugin(Plugin):
+    name = "dlp"
+
+    async def on_before_response_return(self, ctx: PluginContext, result: dict) -> dict | None:
+        # Redact sensitive fields
+        for content in result.get("content", []):
+            if isinstance(content, dict) and "text" in content:
+                content["text"] = content["text"].replace("SECRET", "[REDACTED]")
+        return result
+```
+
+---
+
+### 📊 HTTP Endpoints from Plugins
+
+Plugins can expose HTTP endpoints under `/api/plugins/{name}/` via a `router` property:
+
+```python
+from fastapi import APIRouter
+from toolatlas_mcp.plugin import Plugin
 
 class MyPlugin(Plugin):
     name = "my_plugin"
 
-    async def on_before_tool_call(self, ctx: PluginContext, tool_name: str, arguments: dict) -> None:
-        print(f"Tool {tool_name} called with {arguments}")
+    @property
+    def router(self) -> APIRouter | None:
+        r = APIRouter(tags=["my_plugin"])
+        @r.get("/status")
+        async def status():
+            return {"status": "ok"}
+        return r
+```
 
-    async def on_after_tool_call(self, ctx: PluginContext, tool_name: str, result: dict) -> None:
-        print(f"Tool {tool_name} returned: {result}")
+---
+
+### 📘 Complete Example — Governance ABAC
+
+See [`examples/plugins/governance_abac.py`](examples/plugins/governance_abac.py) for a full ABAC governance plugin demonstrating `PluginAbortError`, `PluginContext.org_id`, `on_tool_filter`, and priority ordering.
+
+---
+
+**Write a custom plugin:**
+
+```python
+from toolatlas_mcp.plugin import Plugin, PluginAbortError, PluginContext
+
+class MyPlugin(Plugin):
+    name = "my_plugin"
+    priority = 0
+
+    async def on_before_tool_call(self, ctx: PluginContext) -> None:
+        # ctx.org_id, ctx.user_id, ctx.client_id available
+        if not self._is_allowed(ctx):
+            raise PluginAbortError("Not authorized")
 ```
 
 Register via entry point in `pyproject.toml`:
@@ -578,6 +700,18 @@ Set via environment variables with `TOOLATLAS_` prefix. A `.env` file in the wor
 | `TOOLATLAS_PLUGIN_DIRS` | `[]` | Comma-separated list of directories to scan for plugin modules |
 
 When starting interactively, you'll be prompted for the data directory and storage type if the environment variables aren't set. If you choose `postgres`, you'll be prompted for the connection details (host, port, database name, username, password). You can also provide a `--database-url` flag or `TOOLATLAS_DATABASE_URL` env var to skip prompts.
+
+### What's New in v4.0.0
+
+| Area | Change | Impact |
+|------|--------|--------|
+| **PluginAbortError** | New exception that propagates through `PluginManager.execute()` — all other exceptions are still swallowed | Authorization, rate limiting, and governance plugins now work correctly — they can **block** tool calls |
+| **Plugin Priority** | `Plugin.priority` attribute (int, default 0, lower runs first) | Governance runs before metrics runs before cache |
+| **PluginContext Identity** | Added `client_id`, `user_id`, `org_id`, `tenant_id`, `proxy_id`, `proxy_name`, `server_name`, `meta` | Plugins can now inspect who is calling and make authorization decisions |
+| **`on_tool_filter` Hook** | Filters the tool list before returning to client | Hide sensitive tools from unauthorized callers |
+| **`on_before_response_return` Hook** | Fires just before response is sent; can modify or block | DLP / redaction plugins |
+| **Plugin HTTP Routers** | `Plugin.router` property auto-mounted at `/api/plugins/{name}/` | Expose custom endpoints from plugins |
+| **`on_before_list_tools` in server.py** | Now called **before** cache check in the SSE handler | Auth plugins can block tool listing even on cache hit |
 
 ### What's New in v3.0.0
 

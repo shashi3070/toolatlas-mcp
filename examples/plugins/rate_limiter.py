@@ -19,7 +19,7 @@ import logging
 import time
 from collections import defaultdict
 
-from toolatlas_mcp.plugin import Plugin, PluginContext, plugin_manager
+from toolatlas_mcp.plugin import Plugin, PluginAbortError, PluginContext, plugin_manager
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class RateLimiterPlugin(Plugin):
         self._call_times[tool] = [t for t in self._call_times[tool] if t > cutoff]
 
         if len(self._call_times[tool]) >= self.max_calls:
-            raise RuntimeError(
+            raise PluginAbortError(
                 f"Rate limit exceeded for '{tool}': "
                 f"{self.max_calls} calls per {self.window_sec}s"
             )

@@ -13,6 +13,7 @@ from toolatlas_mcp import __version__
 from toolatlas_mcp.config import settings as app_settings
 from toolatlas_mcp.db import close_db, get_storage, init_db
 from toolatlas_mcp.registry.storage import StorageBackend
+from toolatlas_mcp.plugin.manager import plugin_manager
 from toolatlas_mcp.proxy.engine import close_all_engines
 from toolatlas_mcp.services.connection_manager import connection_manager
 from toolatlas_mcp.services.ws_manager import ws_manager
@@ -48,6 +49,11 @@ def create_app() -> FastAPI:
 
     from toolatlas_mcp.proxy.server import router as proxy_router
     app.include_router(proxy_router)
+
+    # Mount plugin HTTP routers
+    for plugin in plugin_manager.plugins:
+        if plugin.router:
+            app.include_router(plugin.router, prefix=f"/api/plugins/{plugin.name}")
 
     @app.get("/api/health")
     async def health():

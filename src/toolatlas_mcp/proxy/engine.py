@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any
 
-from toolatlas_mcp.plugin.base import PluginContext
+from toolatlas_mcp.plugin.base import PluginAbortError, PluginContext
 from toolatlas_mcp.plugin.manager import plugin_manager
 from toolatlas_mcp.proxy.middleware import ProxyMiddleware
 from toolatlas_mcp.services.connection_manager import connection_manager
@@ -199,6 +199,15 @@ class ProxyEngine:
         ctx = PluginContext(slug=slug, method="list_tools")
         await plugin_manager.execute("on_after_list_tools", ctx=ctx, tools=tools)
 
+        # Plugin: tool_filter — each plugin gets a chance to filter
+        for plugin in plugin_manager.plugins:
+            try:
+                tools = await plugin.on_tool_filter(ctx=ctx, tools=tools)
+            except PluginAbortError:
+                raise
+            except Exception as e:
+                log.error("Plugin %s tool_filter error: %s", plugin.name, e)
+
         return tools
 
     # ------------------------------------------------------------------
@@ -254,6 +263,7 @@ class ProxyEngine:
         org_id = meta.get("org_id")
         tenant_id = meta.get("tenant_id")
         user_id = meta.get("user_id")
+        client_id = meta.get("client_id")
         async with self.middleware.track(
             tool_name=name,
             proxy_id=proxy["id"],
@@ -266,6 +276,7 @@ class ProxyEngine:
             org_id=org_id,
             tenant_id=tenant_id,
             user_id=user_id,
+            client_id=client_id,
         ) as ctx:
             ctx["add_event"]("proxy_lookup", f"Proxy '{slug}' resolved", {
                 "proxy_slug": slug, "proxy_name": proxy["name"],
@@ -290,8 +301,19 @@ class ProxyEngine:
                 slug=slug, method="call_tool",
                 tool_name=name, arguments=arguments,
                 server_id=server["id"],
+                client_id=client_id,
+                user_id=user_id,
+                org_id=org_id,
+                tenant_id=tenant_id,
+                proxy_id=proxy["id"],
+                proxy_name=proxy.get("name", ""),
+                server_name=server.get("name", ""),
+                meta=meta,
             )
-            await plugin_manager.execute("on_before_tool_call", ctx=pctx)
+            try:
+                await plugin_manager.execute("on_before_tool_call", ctx=pctx)
+            except PluginAbortError as e:
+                raise PermissionError(str(e)) from e
 
             ctx["add_event"]("server_call_start",
                              f"Forwarding to MCP server '{server['name']}'", {
@@ -326,6 +348,16 @@ class ProxyEngine:
             ctx["add_event"]("server_response", f"Response from server '{server['name']}'", {
                 "result_summary": _truncate(result),
             })
+
+            # Plugin: before_response_return
+            for plugin in plugin_manager.plugins:
+                try:
+                    modified = await plugin.on_before_response_return(ctx=pctx, result=result)
+                    if modified is not None:
+                        result = modified
+                except PluginAbortError as e:
+                    raise PermissionError(str(e)) from e
+
             ctx["add_event"]("response_returned", "Response forwarded to client", {
                 "result_summary": _truncate(result),
             })

@@ -11,6 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from toolatlas_mcp import __version__
 from toolatlas_mcp.db import get_storage
+from toolatlas_mcp.plugin.base import PluginAbortError, PluginContext
 from toolatlas_mcp.plugin.manager import plugin_manager
 from toolatlas_mcp.proxy.engine import ProxyEngine
 from toolatlas_mcp.registry.storage import StorageBackend
@@ -219,27 +220,37 @@ async def proxy_message(slug: str, session_id: str, request: Request, storage: S
             return JSONResponse({"ok": True}, status_code=202)
 
         if method in ("list_tools", "tools/list"):
-            # Plugin: before_cache_lookup
-            plugin_cache = await plugin_manager.execute_first(
-                "on_before_cache_lookup", slug=slug,
-            )
-            if plugin_cache is not None:
-                _tools_cache[slug] = plugin_cache
-
-            cached = _tools_cache.get(_cache_key(slug))
-            if not _is_cache_expired(cached):
-                _cache_hits += 1
-                tools = cached[1]
+            # Plugin: before_list_tools (called BEFORE cache so auth can block)
+            ctx = PluginContext(slug=slug, method="list_tools")
+            try:
+                short_circuit = await plugin_manager.execute_first("on_before_list_tools", ctx=ctx)
+            except PluginAbortError as e:
+                send_error(-32001, str(e))
+                return JSONResponse({"ok": True}, status_code=202)
+            if short_circuit is not None:
+                tools = short_circuit
             else:
-                _cache_misses += 1
-                async with _engine_locks[slug]:
-                    cached = _tools_cache.get(_cache_key(slug))
-                    if _is_cache_expired(cached):
-                        _tools_cache[slug] = (
-                            time.time(),
-                            await engine.list_tools(slug),
-                        )
-                tools = _tools_cache[slug][1]
+                # Plugin: before_cache_lookup
+                plugin_cache = await plugin_manager.execute_first(
+                    "on_before_cache_lookup", slug=slug,
+                )
+                if plugin_cache is not None:
+                    _tools_cache[slug] = plugin_cache
+
+                cached = _tools_cache.get(_cache_key(slug))
+                if not _is_cache_expired(cached):
+                    _cache_hits += 1
+                    tools = cached[1]
+                else:
+                    _cache_misses += 1
+                    async with _engine_locks[slug]:
+                        cached = _tools_cache.get(_cache_key(slug))
+                        if _is_cache_expired(cached):
+                            _tools_cache[slug] = (
+                                time.time(),
+                                await engine.list_tools(slug),
+                            )
+                    tools = _tools_cache[slug][1]
 
             # Plugin: after_cache_lookup
             await plugin_manager.execute("on_after_cache_lookup", slug=slug, tools=tools)

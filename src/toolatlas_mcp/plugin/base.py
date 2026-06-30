@@ -3,6 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from fastapi import APIRouter
+
+
+class PluginAbortError(Exception):
+    """Raise from on_before_tool_call / on_before_list_tools /
+    on_before_response_return to abort the operation.
+
+    ``PluginManager.execute()`` propagates this exception; all other
+    exceptions are caught, logged, and swallowed.
+    """
+
 
 @dataclass
 class PluginContext:
@@ -13,6 +24,21 @@ class PluginContext:
     tool_name: str = ""
     arguments: dict[str, Any] = field(default_factory=dict)
     server_id: str = ""
+
+    # Identity (populated from _meta)
+    client_id: str | None = None
+    user_id: str | None = None
+    org_id: str | None = None
+    tenant_id: str | None = None
+
+    # Routing
+    proxy_id: str | None = None
+    proxy_name: str | None = None
+    server_name: str | None = None
+
+    # Raw metadata
+    meta: dict[str, Any] = field(default_factory=dict)
+
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -24,6 +50,7 @@ class Plugin:
     """
 
     name: str = ""
+    priority: int = 0  # lower = runs first
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -45,6 +72,13 @@ class Plugin:
     async def on_after_list_tools(self, ctx: PluginContext, tools: list[dict]) -> None:
         """Post-process the enriched tool list."""
 
+    async def on_tool_filter(self, ctx: PluginContext, tools: list[dict]) -> list[dict]:
+        """Filter the tool list before it is returned to the client.
+
+        Return the (possibly modified) list of tools.
+        """
+        return tools
+
     # ------------------------------------------------------------------
     # Tool call hooks
     # ------------------------------------------------------------------
@@ -54,6 +88,15 @@ class Plugin:
 
     async def on_after_tool_call(self, ctx: PluginContext, result: dict) -> None:
         """Post-process the call response."""
+
+    async def on_before_response_return(
+        self, ctx: PluginContext, result: dict,
+    ) -> dict | None:
+        """Called just before the response is returned to the client.
+
+        Return a modified result dict, or None to pass through unchanged.
+        Raise PluginAbortError to block the response entirely.
+        """
 
     # ------------------------------------------------------------------
     # Server lifecycle hooks
@@ -90,3 +133,12 @@ class Plugin:
 
     async def on_cache_invalidated(self, slug: str) -> None:
         """Called when a proxy's tool cache is invalidated."""
+
+    # ------------------------------------------------------------------
+    # HTTP router (optional)
+    # ------------------------------------------------------------------
+
+    @property
+    def router(self) -> APIRouter | None:
+        """Override to expose HTTP endpoints under /api/plugins/{name}/"""
+        return None

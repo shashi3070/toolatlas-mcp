@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock
 
-from toolatlas_mcp.plugin.base import Plugin, PluginContext
+from toolatlas_mcp.plugin.base import Plugin, PluginAbortError, PluginContext
 from toolatlas_mcp.plugin.manager import PluginManager, plugin_manager
 
 
@@ -200,3 +200,255 @@ async def test_all_hooks_optional():
     await plugin_manager.execute("on_after_tool_call", ctx=PluginContext(), result={})
     await plugin_manager.execute("on_server_connected", server_id="s1")
     await plugin_manager.execute("on_tool_added", server_id="s1", tool_names=[])
+
+
+# ---- PluginAbortError tests ----
+
+
+@pytest.mark.asyncio
+async def test_plugin_abort_error_propagates():
+    """PluginAbortError propagates through execute()."""
+    class AbortPlugin(Plugin):
+        name = "abort"
+        async def on_before_tool_call(self, ctx):
+            raise PluginAbortError("Blocked!")
+
+    await plugin_manager.register(AbortPlugin())
+    ctx = PluginContext(tool_name="test")
+    with pytest.raises(PluginAbortError, match="Blocked!"):
+        await plugin_manager.execute("on_before_tool_call", ctx=ctx)
+
+
+@pytest.mark.asyncio
+async def test_plugin_abort_error_execute_first():
+    """PluginAbortError propagates through execute_first()."""
+    class AbortPlugin(Plugin):
+        name = "abort"
+        async def on_before_list_tools(self, ctx):
+            raise PluginAbortError("Blocked list!")
+
+    await plugin_manager.register(AbortPlugin())
+    ctx = PluginContext(slug="dev", method="list_tools")
+    with pytest.raises(PluginAbortError, match="Blocked list!"):
+        await plugin_manager.execute_first("on_before_list_tools", ctx=ctx)
+
+
+@pytest.mark.asyncio
+async def test_plugin_abort_does_not_break_other_plugins():
+    """Other plugins still run after an aborting plugin in the chain."""
+    class AbortPlugin(Plugin):
+        name = "abort"
+        async def on_before_tool_call(self, ctx):
+            raise PluginAbortError("Blocked!")
+
+    class NormalPlugin(Plugin):
+        name = "normal"
+        def __init__(self):
+            self.called = False
+        async def on_before_tool_call(self, ctx):
+            self.called = True
+
+    # Register abort first, normal second — normal should NOT run
+    np = NormalPlugin()
+    await plugin_manager.register(AbortPlugin())
+    await plugin_manager.register(np)
+    ctx = PluginContext(tool_name="test")
+    with pytest.raises(PluginAbortError):
+        await plugin_manager.execute("on_before_tool_call", ctx=ctx)
+    assert not np.called
+
+
+@pytest.mark.asyncio
+async def test_plugin_abort_error_not_swallowed():
+    """PluginAbortError is NOT caught by the generic except.
+
+    Normal Exception IS swallowed, PluginAbortError propagates and
+    prevents subsequent plugins from running.
+    """
+    class NormalErrorPlugin(Plugin):
+        name = "normal_err"
+        async def on_before_tool_call(self, ctx):
+            raise ValueError("Normal error")
+
+    class AbortPlugin(Plugin):
+        name = "abort"
+        async def on_before_tool_call(self, ctx):
+            raise PluginAbortError("Abort!")
+
+    class FollowPlugin(Plugin):
+        name = "follow"
+        def __init__(self):
+            self.called = False
+        async def on_before_tool_call(self, ctx):
+            self.called = True
+
+    fp = FollowPlugin()
+    await plugin_manager.register(NormalErrorPlugin())
+    await plugin_manager.register(fp)
+    # There is no AbortPlugin — NormalErrorPlugin's ValueError is swallowed,
+    # FollowPlugin should still run
+    ctx = PluginContext(tool_name="test")
+    results = await plugin_manager.execute("on_before_tool_call", ctx=ctx)
+    assert fp.called
+    assert results == [None]  # NormalErrorPlugin raised (swallowed), FollowPlugin returned None
+
+
+# ---- Priority ordering tests ----
+
+
+@pytest.mark.asyncio
+async def test_plugin_priority_ordering():
+    """Plugins execute in priority order (lower first)."""
+    class OrderedPlugin(Plugin):
+        def __init__(self, name, priority, order_list):
+            self.name = name
+            self.priority = priority
+            self._order_list = order_list
+        async def on_before_tool_call(self, ctx):
+            self._order_list.append(self.name)
+
+    order = []
+    await plugin_manager.register(OrderedPlugin("last", 100, order))
+    await plugin_manager.register(OrderedPlugin("first", -100, order))
+    await plugin_manager.register(OrderedPlugin("middle", 0, order))
+
+    ctx = PluginContext(tool_name="test")
+    await plugin_manager.execute("on_before_tool_call", ctx=ctx)
+    assert order == ["first", "middle", "last"]
+
+
+@pytest.mark.asyncio
+async def test_plugin_default_priority():
+    """Default priority is 0 for all plugins."""
+    class DefaultPlugin(Plugin):
+        name = "default"
+
+    p = DefaultPlugin()
+    assert p.priority == 0
+
+
+# ---- on_tool_filter tests ----
+
+
+@pytest.mark.asyncio
+async def test_tool_filter_removes_tools():
+    """on_tool_filter can remove tools from the list."""
+    class FilterPlugin(Plugin):
+        name = "filter"
+        async def on_tool_filter(self, ctx, tools):
+            return [t for t in tools if t["name"] != "secret_tool"]
+
+    await plugin_manager.register(FilterPlugin())
+    in_tools = [{"name": "public_tool"}, {"name": "secret_tool"}]
+    out_tools = in_tools
+    for plugin in plugin_manager.plugins:
+        try:
+            out_tools = await plugin.on_tool_filter(ctx=PluginContext(), tools=out_tools)
+        except PluginAbortError:
+            raise
+    assert len(out_tools) == 1
+    assert out_tools[0]["name"] == "public_tool"
+
+
+@pytest.mark.asyncio
+async def test_tool_filter_multiple_plugins():
+    """Multiple tool filter plugins chain correctly."""
+    class FilterOnlyA(Plugin):
+        name = "filter_a"
+        async def on_tool_filter(self, ctx, tools):
+            return [t for t in tools if "a" in t["name"].lower()]
+
+    class RemoveAlpha(Plugin):
+        name = "filter_b"
+        async def on_tool_filter(self, ctx, tools):
+            return [t for t in tools if t["name"] != "alpha"]
+
+    await plugin_manager.register(FilterOnlyA())
+    await plugin_manager.register(RemoveAlpha())
+    in_tools = [{"name": "alpha"}, {"name": "xyz"}, {"name": "gamma"}]
+    out_tools = in_tools
+    for plugin in plugin_manager.plugins:
+        try:
+            out_tools = await plugin.on_tool_filter(ctx=PluginContext(), tools=out_tools)
+        except PluginAbortError:
+            raise
+    # FilterOnlyA keeps alpha (has 'a'), removes xyz (no 'a'), keeps gamma (has 'a')
+    # RemoveAlpha removes alpha → only gamma remains
+    assert len(out_tools) == 1
+    assert out_tools[0]["name"] == "gamma"
+
+
+# ---- on_before_response_return tests ----
+
+
+@pytest.mark.asyncio
+async def test_before_response_return_modifies_result():
+    """on_before_response_return can modify the result dict."""
+    class ResponsePlugin(Plugin):
+        name = "response_mod"
+        async def on_before_response_return(self, ctx, result):
+            result["modified"] = True
+            return result
+
+    await plugin_manager.register(ResponsePlugin())
+    result = {"content": "hello"}
+    for plugin in plugin_manager.plugins:
+        method = getattr(plugin, "on_before_response_return", None)
+        if method:
+            modified = await method(ctx=PluginContext(), result=result)
+            if modified is not None:
+                result = modified
+    assert result["modified"] is True
+
+
+@pytest.mark.asyncio
+async def test_before_response_return_none_passthrough():
+    """Returning None from on_before_response_return passes through unchanged."""
+    class NoopPlugin(Plugin):
+        name = "noop"
+        async def on_before_response_return(self, ctx, result):
+            return None  # pass through
+
+    await plugin_manager.register(NoopPlugin())
+    result = {"content": "hello"}
+    for plugin in plugin_manager.plugins:
+        method = getattr(plugin, "on_before_response_return", None)
+        if method:
+            modified = await method(ctx=PluginContext(), result=result)
+            if modified is not None:
+                result = modified
+    assert result == {"content": "hello"}
+
+
+# ---- PluginContext identity tests ----
+
+
+@pytest.mark.asyncio
+async def test_plugin_context_identity_fields():
+    """PluginContext carries identity and routing fields."""
+    ctx = PluginContext(
+        slug="dev", method="call_tool", tool_name="search",
+        client_id="chatbot-v3", user_id="shashi",
+        org_id="acme-corp", tenant_id="dev-42",
+        proxy_id="proxy-1", proxy_name="My Proxy",
+        server_name="Jira Server",
+        meta={"trace_id": "abc123"},
+    )
+    assert ctx.client_id == "chatbot-v3"
+    assert ctx.user_id == "shashi"
+    assert ctx.org_id == "acme-corp"
+    assert ctx.tenant_id == "dev-42"
+    assert ctx.proxy_id == "proxy-1"
+    assert ctx.proxy_name == "My Proxy"
+    assert ctx.server_name == "Jira Server"
+    assert ctx.meta["trace_id"] == "abc123"
+
+
+# ---- Plugin router property ----
+
+
+@pytest.mark.asyncio
+async def test_plugin_router_default_none():
+    """Default router property returns None."""
+    p = Plugin()
+    assert p.router is None

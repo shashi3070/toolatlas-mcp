@@ -18,7 +18,7 @@ python examples/plugins/validation_plugin.py
 import logging
 import sys
 
-from toolatlas_mcp.plugin import Plugin, PluginContext, plugin_manager
+from toolatlas_mcp.plugin import Plugin, PluginAbortError, PluginContext, plugin_manager
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -46,14 +46,14 @@ class ValidationPlugin(Plugin):
         if missing:
             msg = f"Tool '{tool}' missing required arguments: {missing}"
             log.error(msg)
-            raise ValueError(msg)
+            raise PluginAbortError(msg)
 
         type_map = self.TYPE_CHECKS.get(tool, {})
         for key, expected_type in type_map.items():
             if key in args and not isinstance(args[key], expected_type):
                 msg = f"Tool '{tool}' argument '{key}' must be {expected_type.__name__}, got {type(args[key]).__name__}"
                 log.error(msg)
-                raise TypeError(msg)
+                raise PluginAbortError(msg)
 
         log.info("Validation passed for %s/%s", ctx.slug, tool)
 
@@ -70,11 +70,11 @@ async def main():
         arguments={"project": "TOOLATLAS"},
     )
 
-    # This should raise ValueError because "summary" is missing
+    # This should raise PluginAbortError because "summary" is missing
     try:
         await plugin_manager.execute("on_before_tool_call", ctx=ctx)
-        log.info("ERROR: Should have raised ValueError!")
-    except ValueError as e:
+        log.info("ERROR: Should have raised PluginAbortError!")
+    except PluginAbortError as e:
         log.info("Correctly blocked: %s", e)
 
     # Fix arguments and try again
@@ -82,7 +82,7 @@ async def main():
     try:
         await plugin_manager.execute("on_before_tool_call", ctx=ctx)
         log.info("Validation passed with complete arguments")
-    except (ValueError, TypeError) as e:
+    except PluginAbortError as e:
         log.error("Unexpected error: %s", e)
 
     log.info("Example completed")
