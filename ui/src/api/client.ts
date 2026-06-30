@@ -92,6 +92,8 @@ export type Domain = {
 export type CallRecord = {
   id: string;
   trace_id?: string;
+  span_id?: string;
+  parent_span_id?: string;
   tool_name: string;
   proxy_id?: string;
   tool_id?: string;
@@ -103,6 +105,9 @@ export type CallRecord = {
   error_message?: string;
   timestamp?: string;
   client_id?: string;
+  org_id?: string;
+  tenant_id?: string;
+  user_id?: string;
 };
 
 export type CallDetail = CallRecord & {
@@ -200,7 +205,7 @@ export const glossaryApi = {
 
 export const analyticsApi = {
   stats: () => api.get<CallStats>("/analytics/stats").then((r) => r.data),
-  calls: (params?: { limit?: number; offset?: number }) =>
+  calls: (params?: { limit?: number; offset?: number; org_id?: string; tenant_id?: string }) =>
     api.get<CallRecord[]>("/analytics/calls", { params }).then((r) => r.data),
   callDetail: (callId: string) =>
     api.get<CallDetail>(`/analytics/calls/${callId}`).then((r) => r.data),
@@ -233,8 +238,8 @@ export type TraceSummary = {
 
 export type TraceGraphResponse = {
   trace_id: string;
-  nodes: { id: string; type: string; tool_name: string; duration_ms: number; success: boolean; timestamp?: string }[];
-  edges: { source: string; target: string; label?: string }[];
+  nodes: { id: string; type: string; tool_name: string; duration_ms: number; success: boolean; timestamp?: string; span_id?: string; parent_span_id?: string }[];
+  edges: { source: string; target: string; label?: string; duration_ms?: number; type?: string }[];
   total_duration_ms: number;
   tool_count: number;
 };

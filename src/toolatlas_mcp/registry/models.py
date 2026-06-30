@@ -129,6 +129,8 @@ class ToolCall(Base):
 
     id = Column(String, primary_key=True, default=_uuid)
     trace_id = Column(String, nullable=True, index=True)
+    span_id = Column(String, nullable=True, index=True)
+    parent_span_id = Column(String, nullable=True)
     proxy_id = Column(String, ForeignKey("proxies.id", ondelete="SET NULL"), nullable=True)
     tool_id = Column(String, ForeignKey("tools.id", ondelete="SET NULL"), nullable=True)
     server_id = Column(String, ForeignKey("servers.id", ondelete="SET NULL"), nullable=True)
@@ -140,6 +142,9 @@ class ToolCall(Base):
     error_message = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=_utcnow)
     client_id = Column(String, nullable=True)
+    org_id = Column(String, nullable=True)
+    tenant_id = Column(String, nullable=True)
+    user_id = Column(String, nullable=True)
     events = Column(JSON, nullable=True)
 
     tool = relationship("Tool", back_populates="calls")

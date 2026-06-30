@@ -45,6 +45,11 @@ function TraceModal({ call, onClose }: { call: CallDetail | null; onClose: () =>
               </span></p>
             </div>
             {call.trace_id && <div><span className="text-slate-500">Trace ID</span><p className="font-mono text-xs truncate">{call.trace_id}</p></div>}
+            {call.span_id && <div><span className="text-slate-500">Span ID</span><p className="font-mono text-xs truncate">{call.span_id}</p></div>}
+            {call.parent_span_id && <div><span className="text-slate-500">Parent Span</span><p className="font-mono text-xs truncate">{call.parent_span_id}</p></div>}
+            {call.org_id && <div><span className="text-slate-500">Org</span><p className="font-medium text-xs truncate">{call.org_id}</p></div>}
+            {call.tenant_id && <div><span className="text-slate-500">Tenant</span><p className="font-medium text-xs truncate">{call.tenant_id}</p></div>}
+            {call.user_id && <div><span className="text-slate-500">User</span><p className="font-mono text-xs truncate">{call.user_id}</p></div>}
             {call.error_message && (
               <div className="col-span-2">
                 <span className="text-slate-500">Error</span>

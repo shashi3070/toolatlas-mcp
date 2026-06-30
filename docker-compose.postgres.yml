@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: toolatlas-postgres
+    environment:
+      POSTGRES_USER: toolatlas
+      POSTGRES_PASSWORD: toolatlas
+      POSTGRES_DB: toolatlas
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toolatlas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  toolatlas:
+    build: .
+    container_name: toolatlas-pg
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TOOLATLAS_HOST: "0.0.0.0"
+      TOOLATLAS_PORT: "8081"
+      TOOLATLAS_STORAGE_TYPE: "sqlite"
+      TOOLATLAS_DATABASE_URL: "postgresql+asyncpg://toolatlas:toolatlas@postgres:5432/toolatlas"
+      TOOLATLAS_LOG_LEVEL: "INFO"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

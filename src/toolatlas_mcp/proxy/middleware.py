@@ -21,9 +21,15 @@ class ProxyMiddleware:
         client_id: str | None = None,
         request_args: dict | None = None,
         trace_id: str | None = None,
+        span_id: str | None = None,
+        parent_span_id: str | None = None,
+        org_id: str | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
     ) -> AsyncGenerator[dict, Any]:
         events: list[dict] = []
         trace_id = trace_id or str(uuid4())
+        span_id = span_id or str(uuid4())
 
         def add_event(event_type: str, description: str, details: dict | None = None):
             events.append({
@@ -42,7 +48,7 @@ class ProxyMiddleware:
         })
 
         try:
-            yield {"add_event": add_event, "trace_id": trace_id}
+            yield {"add_event": add_event, "trace_id": trace_id, "span_id": span_id}
         except Exception as e:
             success = False
             error_message = str(e)
@@ -63,5 +69,10 @@ class ProxyMiddleware:
                 error_message=error_message,
                 client_id=client_id,
                 trace_id=trace_id,
+                span_id=span_id,
+                parent_span_id=parent_span_id,
+                org_id=org_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
                 events=events,
             )

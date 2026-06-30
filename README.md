@@ -867,6 +867,93 @@ curl -s -X POST "http://localhost:8081/proxy/dev/message/$SESSION_ID" \
 
 ---
 
+## Session Tracing (`_meta` Protocol)
+
+ToolAtlas supports an **`_meta` protocol** for passing session context through the MCP proxy. This allows AI clients to correlate tool calls into traces, build span trees, and attach tenant/org context for governance.
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trace_id` | `str` (optional) | Groups calls into a single trace. Auto-generated if omitted. |
+| `span_id` | `str` (optional) | Unique identifier for this call. Auto-generated via `uuid4()` if omitted. |
+| `parent_span_id` | `str` (optional) | Links this call as a child of a previous span, building a span tree. |
+| `org_id` | `str` (optional) | Organization identifier for multi-tenant deployments. |
+| `tenant_id` | `str` (optional) | Tenant identifier (pass-through; enforcement via plugins). |
+| `user_id` | `str` (optional) | End-user identifier who initiated the call. |
+
+### Usage
+
+Pass `_meta` alongside tool arguments in `call_tool`:
+
+```python
+import uuid
+
+meta = {
+    "trace_id": str(uuid.uuid4()),
+    "span_id": str(uuid.uuid4()),
+    "parent_span_id": previous_span_id,
+    "org_id": "acme-corp",
+    "tenant_id": "team-alpha",
+}
+
+result = await session.call_tool("search_code", {"query": "auth"}, _meta=meta)
+```
+
+- All calls sharing the same `trace_id` are grouped in the **Call Flow** tab.
+- When `parent_span_id` is set, edges follow the parent–child hierarchy (span tree). Without it, edges are chronological.
+- Tenant/org fields are stored on each call record and exposed via the API (`/api/analytics/calls?tenant_id=...`).
+
+See [`examples/client/python_client.py`](examples/client/python_client.py) for a complete session tracing example.
+
+---
+
+## Docker
+
+### Quick Start (SQLite/JSON Storage)
+
+```bash
+docker compose up --build
+```
+
+Opens ToolAtlas at `http://localhost:8081` with JSON file storage persisted in a Docker volume.
+
+### PostgreSQL
+
+```bash
+docker compose -f docker-compose.postgres.yml up --build
+```
+
+Uses PostgreSQL 16 for production-grade storage, automatically initialized by ToolAtlas on startup.
+
+### Configuration
+
+Set environment variables via the `environment` key in `docker-compose.yml`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TOOLATLAS_HOST` | `0.0.0.0` | Bind address |
+| `TOOLATLAS_PORT` | `8081` | HTTP port |
+| `TOOLATLAS_STORAGE_TYPE` | `json` | `json` or `sqlite` |
+| `TOOLATLAS_DATABASE_URL` | `sqlite+aiosqlite:////data/toolatlas.db` | Database URL |
+| `TOOLATLAS_LOG_LEVEL` | `INFO` | Log level |
+| `TOOLATLAS_BASE_PATH` | `` | Sub-path for reverse proxy |
+| `TOOLATLAS_PLUGINS` | `` | Comma-separated plugin list |
+
+### Volumes
+
+- `toolatlas_data` — persisted JSON storage and SQLite database (Docker-managed volume)
+- `postgres_data` — persisted PostgreSQL data (when using postgres compose file)
+
+### Build from Source
+
+```bash
+docker build -t toolatlas-mcp .
+docker run -p 8081:8081 -v toolatlas_data:/data toolatlas-mcp
+```
+
+---
+
 ## Development
 
 ```bash

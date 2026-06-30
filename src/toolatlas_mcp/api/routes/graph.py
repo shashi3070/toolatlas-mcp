@@ -148,8 +148,10 @@ async def trace_graph(
     edges: list[TraceEdge] = []
     total_duration = sum(c.get("duration_ms", 0) for c in trace_calls)
 
-    for i, c in enumerate(trace_calls):
-        cid = c.get("id", f"call_{i}")
+    by_id: dict[str, dict] = {}
+    for c in trace_calls:
+        cid = c.get("id", "")
+        by_id[cid] = c
         ts = c.get("timestamp")
         nodes.append(TraceNode(
             id=cid,
@@ -158,14 +160,39 @@ async def trace_graph(
             duration_ms=c.get("duration_ms", 0),
             success=c.get("success", True),
             timestamp=str(ts) if ts else None,
+            span_id=c.get("span_id"),
+            parent_span_id=c.get("parent_span_id"),
         ))
-        if i > 0:
+
+    parent_span_to_child: dict[str, list[str]] = {}
+    for c in trace_calls:
+        psid = c.get("parent_span_id")
+        if psid:
+            parent_span_to_child.setdefault(psid, []).append(c["id"])
+
+    if parent_span_to_child:
+        for psid, child_ids in parent_span_to_child.items():
+            parent_call = next(
+                (nc for nc in trace_calls if nc.get("span_id") == psid),
+                None,
+            )
+            for cid in child_ids:
+                edges.append(TraceEdge(
+                    source=parent_call["id"] if parent_call else psid,
+                    target=cid,
+                    label=f"{by_id[cid].get('duration_ms', 0):.0f}ms",
+                    duration_ms=by_id[cid].get("duration_ms", 0),
+                    type="span",
+                ))
+    else:
+        for i in range(1, len(trace_calls)):
             prev_id = trace_calls[i - 1].get("id", f"call_{i - 1}")
+            cid = trace_calls[i].get("id", f"call_{i}")
             edges.append(TraceEdge(
                 source=prev_id,
                 target=cid,
-                label=f"{c.get('duration_ms', 0):.0f}ms",
-                duration_ms=c.get("duration_ms", 0),
+                label=f"{trace_calls[i].get('duration_ms', 0):.0f}ms",
+                duration_ms=trace_calls[i].get("duration_ms", 0),
             ))
 
     return TraceGraphResponse(

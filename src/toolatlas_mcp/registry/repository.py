@@ -415,6 +415,11 @@ class RegistryRepository(StorageBackend):
         error_message: str | None = None,
         client_id: str | None = None,
         trace_id: str | None = None,
+        span_id: str | None = None,
+        parent_span_id: str | None = None,
+        org_id: str | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
         events: list | None = None,
     ) -> dict:
         call = ToolCall(
@@ -429,6 +434,11 @@ class RegistryRepository(StorageBackend):
             error_message=error_message,
             client_id=client_id,
             trace_id=trace_id,
+            span_id=span_id,
+            parent_span_id=parent_span_id,
+            org_id=org_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
             events=events or [],
         )
         self.db.add(call)
@@ -441,6 +451,7 @@ class RegistryRepository(StorageBackend):
 
     async def list_calls(
         self, proxy_id: str | None = None, tool_id: str | None = None,
+        org_id: str | None = None, tenant_id: str | None = None,
         limit: int = 100, offset: int = 0,
     ) -> list[dict]:
         stmt = select(ToolCall).order_by(ToolCall.timestamp.desc())
@@ -448,6 +459,10 @@ class RegistryRepository(StorageBackend):
             stmt = stmt.where(ToolCall.proxy_id == proxy_id)
         if tool_id:
             stmt = stmt.where(ToolCall.tool_id == tool_id)
+        if org_id:
+            stmt = stmt.where(ToolCall.org_id == org_id)
+        if tenant_id:
+            stmt = stmt.where(ToolCall.tenant_id == tenant_id)
         stmt = stmt.offset(offset).limit(limit)
         result = await self.db.execute(stmt)
         return [_model_to_dict(c) for c in result.scalars().all()]

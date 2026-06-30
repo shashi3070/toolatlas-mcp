@@ -135,6 +135,11 @@ class StorageBackend:
         error_message: str | None = None,
         client_id: str | None = None,
         trace_id: str | None = None,
+        span_id: str | None = None,
+        parent_span_id: str | None = None,
+        org_id: str | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
         events: list | None = None,
     ) -> Any:
         raise NotImplementedError
@@ -142,7 +147,7 @@ class StorageBackend:
     async def get_call(self, call_id: str) -> Any | None:
         raise NotImplementedError
 
-    async def list_calls(self, proxy_id: str | None = None, tool_id: str | None = None, limit: int = 100, offset: int = 0) -> list[Any]:
+    async def list_calls(self, proxy_id: str | None = None, tool_id: str | None = None, org_id: str | None = None, tenant_id: str | None = None, limit: int = 100, offset: int = 0) -> list[Any]:
         raise NotImplementedError
 
     async def get_call_stats(self) -> dict[str, Any]:

@@ -17,6 +17,8 @@ async def get_stats(storage: StorageBackend = Depends(get_storage)):
 async def list_calls(
     proxy_id: str | None = Query(None),
     tool_id: str | None = Query(None),
+    org_id: str | None = Query(None),
+    tenant_id: str | None = Query(None),
     limit: int = Query(100),
     offset: int = Query(0),
     storage: StorageBackend = Depends(get_storage),
@@ -24,6 +26,8 @@ async def list_calls(
     calls = await storage.list_calls(
         proxy_id=proxy_id,
         tool_id=tool_id,
+        org_id=org_id,
+        tenant_id=tenant_id,
         limit=limit,
         offset=offset,
     )

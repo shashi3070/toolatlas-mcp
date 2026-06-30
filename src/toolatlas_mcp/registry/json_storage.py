@@ -531,12 +531,22 @@ class JSONStorage(StorageBackend):
         error_message: str | None = None,
         client_id: str | None = None,
         trace_id: str | None = None,
+        span_id: str | None = None,
+        parent_span_id: str | None = None,
+        org_id: str | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
         events: list | None = None,
     ) -> dict:
         async with self._lock:
             call = {
                 "id": _uuid(),
                 "trace_id": trace_id,
+                "span_id": span_id,
+                "parent_span_id": parent_span_id,
+                "org_id": org_id,
+                "tenant_id": tenant_id,
+                "user_id": user_id,
                 "tool_name": tool_name,
                 "proxy_id": proxy_id,
                 "tool_id": tool_id,
@@ -562,6 +572,7 @@ class JSONStorage(StorageBackend):
 
     async def list_calls(
         self, proxy_id: str | None = None, tool_id: str | None = None,
+        org_id: str | None = None, tenant_id: str | None = None,
         limit: int = 100, offset: int = 0,
     ) -> list[dict]:
         calls = sorted(self._data["calls"], key=lambda c: c.get("timestamp", ""), reverse=True)
@@ -569,6 +580,10 @@ class JSONStorage(StorageBackend):
             calls = [c for c in calls if c.get("proxy_id") == proxy_id]
         if tool_id:
             calls = [c for c in calls if c.get("tool_id") == tool_id]
+        if org_id:
+            calls = [c for c in calls if c.get("org_id") == org_id]
+        if tenant_id:
+            calls = [c for c in calls if c.get("tenant_id") == tenant_id]
         return [dict(c) for c in calls[offset:offset + limit]]
 
     async def get_call_stats(self) -> dict[str, Any]:

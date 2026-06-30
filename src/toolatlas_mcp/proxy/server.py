@@ -5,7 +5,7 @@ import random
 import time
 import uuid
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
@@ -13,6 +13,7 @@ from toolatlas_mcp import __version__
 from toolatlas_mcp.db import get_storage
 from toolatlas_mcp.plugin.manager import plugin_manager
 from toolatlas_mcp.proxy.engine import ProxyEngine
+from toolatlas_mcp.registry.storage import StorageBackend
 from toolatlas_mcp.services.connection_manager import connection_manager
 
 log = logging.getLogger(__name__)
@@ -178,7 +179,7 @@ async def proxy_sse(slug: str, request: Request):
 
 
 @router.post("/proxy/{slug}/message/{session_id}")
-async def proxy_message(slug: str, session_id: str, request: Request):
+async def proxy_message(slug: str, session_id: str, request: Request, storage: StorageBackend = Depends(get_storage)):
     global _cache_hits, _cache_misses
 
     try:
@@ -197,81 +198,80 @@ async def proxy_message(slug: str, session_id: str, request: Request):
                 {"jsonrpc": "2.0", "id": msg_id, "error": {"code": code, "message": message}},
             )
 
-    async for storage in get_storage():
-        try:
-            engine = await _get_engine(slug, storage)
-        except Exception as e:
-            log.exception("Failed to get engine for %s", slug)
-            send_error(-32603, str(e))
+    try:
+        engine = await _get_engine(slug, storage)
+    except Exception as e:
+        log.exception("Failed to get engine for %s", slug)
+        send_error(-32603, str(e))
+        return JSONResponse({"ok": True}, status_code=202)
+
+    try:
+        if method in ("initialize",):
+            result = {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "toolatlas-mcp", "version": __version__},
+            }
+            _send_to_session(session_id, {"jsonrpc": "2.0", "id": msg_id, "result": result})
             return JSONResponse({"ok": True}, status_code=202)
 
-        try:
-            if method in ("initialize",):
-                result = {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "toolatlas-mcp", "version": __version__},
-                }
-                _send_to_session(session_id, {"jsonrpc": "2.0", "id": msg_id, "result": result})
-                return JSONResponse({"ok": True}, status_code=202)
-
-            if method in ("notifications/initialized",):
-                return JSONResponse({"ok": True}, status_code=202)
-
-            if method in ("list_tools", "tools/list"):
-                # Plugin: before_cache_lookup
-                plugin_cache = await plugin_manager.execute_first(
-                    "on_before_cache_lookup", slug=slug,
-                )
-                if plugin_cache is not None:
-                    _tools_cache[slug] = plugin_cache
-
-                cached = _tools_cache.get(_cache_key(slug))
-                if not _is_cache_expired(cached):
-                    _cache_hits += 1
-                    tools = cached[1]
-                else:
-                    _cache_misses += 1
-                    async with _engine_locks[slug]:
-                        cached = _tools_cache.get(_cache_key(slug))
-                        if _is_cache_expired(cached):
-                            _tools_cache[slug] = (
-                                time.time(),
-                                await engine.list_tools(slug),
-                            )
-                    tools = _tools_cache[slug][1]
-
-                # Plugin: after_cache_lookup
-                await plugin_manager.execute("on_after_cache_lookup", slug=slug, tools=tools)
-
-                _send_to_session(
-                    session_id,
-                    {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}},
-                )
-                return JSONResponse({"ok": True}, status_code=202)
-
-            if method in ("call_tool", "tools/call"):
-                params = body.get("params", {})
-                name = params.get("name", "")
-                arguments = params.get("arguments", {})
-                meta = params.get("_meta", {})
-                result = await engine.call_tool(slug, name, arguments, meta=meta)
-                _send_to_session(
-                    session_id,
-                    {"jsonrpc": "2.0", "id": msg_id, "result": result},
-                )
-                return JSONResponse({"ok": True}, status_code=202)
-
-            send_error(-32601, f"Method not found: {method}")
+        if method in ("notifications/initialized",):
             return JSONResponse({"ok": True}, status_code=202)
 
-        except PermissionError as e:
-            send_error(-32001, str(e))
+        if method in ("list_tools", "tools/list"):
+            # Plugin: before_cache_lookup
+            plugin_cache = await plugin_manager.execute_first(
+                "on_before_cache_lookup", slug=slug,
+            )
+            if plugin_cache is not None:
+                _tools_cache[slug] = plugin_cache
+
+            cached = _tools_cache.get(_cache_key(slug))
+            if not _is_cache_expired(cached):
+                _cache_hits += 1
+                tools = cached[1]
+            else:
+                _cache_misses += 1
+                async with _engine_locks[slug]:
+                    cached = _tools_cache.get(_cache_key(slug))
+                    if _is_cache_expired(cached):
+                        _tools_cache[slug] = (
+                            time.time(),
+                            await engine.list_tools(slug),
+                        )
+                tools = _tools_cache[slug][1]
+
+            # Plugin: after_cache_lookup
+            await plugin_manager.execute("on_after_cache_lookup", slug=slug, tools=tools)
+
+            _send_to_session(
+                session_id,
+                {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}},
+            )
             return JSONResponse({"ok": True}, status_code=202)
-        except ValueError as e:
-            send_error(-32602, str(e))
+
+        if method in ("call_tool", "tools/call"):
+            params = body.get("params", {})
+            name = params.get("name", "")
+            arguments = params.get("arguments", {})
+            meta = params.get("_meta", {})
+            result = await engine.call_tool(slug, name, arguments, meta=meta)
+            _send_to_session(
+                session_id,
+                {"jsonrpc": "2.0", "id": msg_id, "result": result},
+            )
             return JSONResponse({"ok": True}, status_code=202)
-        except Exception as e:
-            log.exception("Proxy error handling %s for %s", method, slug)
-            send_error(-32603, str(e))
-            return JSONResponse({"ok": True}, status_code=202)
+
+        send_error(-32601, f"Method not found: {method}")
+        return JSONResponse({"ok": True}, status_code=202)
+
+    except PermissionError as e:
+        send_error(-32001, str(e))
+        return JSONResponse({"ok": True}, status_code=202)
+    except ValueError as e:
+        send_error(-32602, str(e))
+        return JSONResponse({"ok": True}, status_code=202)
+    except Exception as e:
+        log.exception("Proxy error handling %s for %s", method, slug)
+        send_error(-32603, str(e))
+        return JSONResponse({"ok": True}, status_code=202)

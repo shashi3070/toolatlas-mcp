@@ -247,7 +247,13 @@ class ProxyEngine:
 
         setting = await self.storage.get_tool_setting(proxy["id"], db_tool["id"])
 
-        trace_id = (meta or {}).get("trace_id")
+        meta = meta or {}
+        trace_id = meta.get("trace_id")
+        span_id = meta.get("span_id")
+        parent_span_id = meta.get("parent_span_id")
+        org_id = meta.get("org_id")
+        tenant_id = meta.get("tenant_id")
+        user_id = meta.get("user_id")
         async with self.middleware.track(
             tool_name=name,
             proxy_id=proxy["id"],
@@ -255,6 +261,11 @@ class ProxyEngine:
             server_id=server["id"],
             request_args=arguments,
             trace_id=trace_id,
+            span_id=span_id,
+            parent_span_id=parent_span_id,
+            org_id=org_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
         ) as ctx:
             ctx["add_event"]("proxy_lookup", f"Proxy '{slug}' resolved", {
                 "proxy_slug": slug, "proxy_name": proxy["name"],

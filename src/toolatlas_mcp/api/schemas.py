@@ -186,6 +186,8 @@ class BulkImportResponse(BaseModel):
 class CallRecordResponse(ResponseModel):
     id: str
     trace_id: str | None = None
+    span_id: str | None = None
+    parent_span_id: str | None = None
     tool_name: str
     proxy_id: str | None = None
     tool_id: str | None = None
@@ -197,6 +199,9 @@ class CallRecordResponse(ResponseModel):
     error_message: str | None = None
     timestamp: datetime | None = None
     client_id: str | None = None
+    org_id: str | None = None
+    tenant_id: str | None = None
+    user_id: str | None = None
 
 
 class CallDetailResponse(CallRecordResponse):
@@ -295,6 +300,8 @@ class TraceNode(BaseModel):
     duration_ms: float = 0.0
     success: bool = True
     timestamp: str | None = None
+    span_id: str | None = None
+    parent_span_id: str | None = None
 
 
 class TraceEdge(BaseModel):
@@ -302,6 +309,7 @@ class TraceEdge(BaseModel):
     target: str
     label: str | None = None
     duration_ms: float | None = None
+    type: str = "span"
 
 
 class TraceGraphResponse(BaseModel):
