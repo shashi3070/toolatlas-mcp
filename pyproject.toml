@@ -4,22 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "toolatlas-mcp"
-version = "4.1.0"
+version = "4.1.1"
 description = "ToolAtlas — Discover, Govern, and Optimize MCP Tools"
 readme = "README.md"
-license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
-    {name = "ToolAtlas contributors"}
+    {name = "Shashi Kundan", email = "shashikundan0001@gmail.com"}
 ]
 keywords = [
     "mcp", "model-context-protocol", "tools", "governance",
     "proxy", "registry", "ai", "llm", "agent",
+    "fastapi", "async", "sqlalchemy", "analytics",
+    "discovery", "optimization", "sse", "server-sent-events",
+    "plugin", "python",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -63,7 +66,9 @@ all = [
 [project.urls]
 Homepage = "https://github.com/shashi3070/toolatlas-mcp"
 Repository = "https://github.com/shashi3070/toolatlas-mcp"
+Documentation = "https://github.com/shashi3070/toolatlas-mcp#readme"
 Issues = "https://github.com/shashi3070/toolatlas-mcp/issues"
+Changelog = "https://github.com/shashi3070/toolatlas-mcp/blob/main/docs/changelog.md"
 
 [project.scripts]
 toolatlas = "toolatlas_mcp.__main__:main"
