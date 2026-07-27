@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Link2, Unlink, ToggleLeft, ToggleRight, X, Search } from "lucide-react";
 import { proxiesApi, serversApi, type Server, type Tool } from "../api/client";
 import Loading from "../components/Loading";
+import { primary } from "../theme";
 
 export default function ProxyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -117,7 +118,7 @@ export default function ProxyDetail() {
                 <button onClick={() => {
                   const sel = document.getElementById("serverSelect") as HTMLSelectElement;
                   if (sel.value) openToolModal(sel.value);
-                }} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700">Link</button>
+                }} className="bg-[var(--primary-600)] text-white px-3 py-2 rounded-lg text-sm hover:bg-[var(--primary-700)]">Link</button>
               </div>
             </div>
           )}
@@ -204,12 +205,12 @@ export default function ProxyDetail() {
                   placeholder="Search tools..."
                   value={toolSearch}
                   onChange={(e) => setToolSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]"
                 />
               </div>
               <button
                 onClick={() => setCheckedTools(new Set(filteredTools.map((t) => t.id)))}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                className="text-xs text-[var(--primary-600)] hover:text-[var(--primary-800)] font-medium"
               >
                 Select All
               </button>
@@ -251,7 +252,7 @@ export default function ProxyDetail() {
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t">
               <button onClick={() => setShowToolModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
-              <button onClick={confirmLink} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <button onClick={confirmLink} className="px-4 py-2 text-sm bg-[var(--primary-600)] text-white rounded-lg hover:bg-[var(--primary-700)]">
                 Link ({checkedTools.size} tool{checkedTools.size !== 1 ? "s" : ""})
               </button>
             </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
 import { analyticsApi, proxiesApi, toolsApi, type CallDetail, type CallRecord, type CallStats, type Proxy, type Tool } from "../api/client";
+import { primary } from "../theme";
 import Loading from "../components/Loading";
 
 const EVENT_ICONS: Record<string, string> = {
@@ -193,7 +194,7 @@ export default function Analytics() {
             {allTools.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
           {(search || filterProxy || filterTool) && (
-            <button onClick={() => { setSearch(""); setFilterProxy(""); setFilterTool(""); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+            <button onClick={() => { setSearch(""); setFilterProxy(""); setFilterTool(""); }} className="text-sm flex items-center gap-1" style={{ color: primary("600") }} onMouseEnter={(e) => (e.currentTarget.style.color = primary("800"))} onMouseLeave={(e) => (e.currentTarget.style.color = primary("600"))}>
               <X size={14} /> Clear
             </button>
           )}

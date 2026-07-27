@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   toolatlas:
     build: .
@@ -8,12 +6,20 @@ services:
       - "8081:8081"
     volumes:
       - toolatlas_data:/data
+      - ./src/toolatlas_mcp:/app/dev/toolatlas_mcp
+    working_dir: /app
+    entrypoint: ["python", "-m", "toolatlas_mcp"]
+    command: ["start", "--host", "0.0.0.0", "--port", "8081", "--storage", "json", "--data-dir", "/data"]
     environment:
       TOOLATLAS_HOST: "0.0.0.0"
       TOOLATLAS_PORT: "8081"
       TOOLATLAS_STORAGE_TYPE: "json"
       TOOLATLAS_DATABASE_URL: "sqlite+aiosqlite:////data/toolatlas.db"
       TOOLATLAS_LOG_LEVEL: "INFO"
+      TOOLATLAS_TOP_TABS: "true"
+      TOOLATLAS_PRIMARY_COLOR: "#6832ba"
+      TOOLATLAS_DATA_DIR: "/data"
+      PYTHONPATH: "/app/dev"
     restart: unless-stopped
 
 volumes:

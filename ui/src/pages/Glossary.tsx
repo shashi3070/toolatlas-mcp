@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Plus, Pencil, Trash2, Search, X, Upload, Download } from "lucide-react";
 import { glossaryApi, type GlossaryTerm, type Domain } from "../api/client";
 import Loading from "../components/Loading";
+import { primary } from "../theme";
 
 export default function Glossary() {
   const [terms, setTerms] = useState<GlossaryTerm[]>([]);
@@ -27,8 +28,8 @@ export default function Glossary() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setTab("domains")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "domains" ? "bg-blue-600 text-white" : "border hover:bg-slate-50"}`}>Domains</button>
-        <button onClick={() => setTab("terms")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "terms" ? "bg-blue-600 text-white" : "border hover:bg-slate-50"}`}>Terms</button>
+        <button onClick={() => setTab("domains")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "domains" ? "bg-[var(--primary-600)] text-white" : "border hover:bg-slate-50"}`}>Domains</button>
+        <button onClick={() => setTab("terms")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "terms" ? "bg-[var(--primary-600)] text-white" : "border hover:bg-slate-50"}`}>Terms</button>
       </div>
 
       {tab === "domains" && <DomainsPanel domains={domains} onRefresh={load} />}
@@ -101,7 +102,7 @@ function TermsPanel({ terms, domains, onRefresh }: { terms: GlossaryTerm[]; doma
   return (
     <div>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <button onClick={openCreate} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+        <button onClick={openCreate} className="flex items-center gap-2 bg-[var(--primary-600)] text-white px-4 py-2 rounded-lg text-sm hover:bg-[var(--primary-700)]">
           <Plus size={16} /> Add Term
         </button>
         <div className="relative flex-1 min-w-[150px] max-w-xs">
@@ -113,7 +114,7 @@ function TermsPanel({ terms, domains, onRefresh }: { terms: GlossaryTerm[]; doma
           {domains.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
         {(search || filterDomain) && (
-          <button onClick={() => { setSearch(""); setFilterDomain(""); }} className="text-xs text-blue-600 hover:text-blue-800">Clear</button>
+          <button onClick={() => { setSearch(""); setFilterDomain(""); }} className="text-xs text-[var(--primary-600)] hover:text-[var(--primary-800)]">Clear</button>
         )}
       </div>
 
@@ -138,7 +139,7 @@ function TermsPanel({ terms, domains, onRefresh }: { terms: GlossaryTerm[]; doma
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={save} disabled={!domainId || !term} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+            <button onClick={save} disabled={!domainId || !term} className="bg-[var(--primary-600)] text-white px-4 py-2 rounded-lg text-sm hover:bg-[var(--primary-700)] disabled:opacity-50">
               {editId ? "Update" : "Add"}
             </button>
             <button onClick={() => { setShowForm(false); setEditId(null); }} className="border px-4 py-2 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
@@ -149,7 +150,7 @@ function TermsPanel({ terms, domains, onRefresh }: { terms: GlossaryTerm[]; doma
       <div className="space-y-4">
         {Array.from(grouped.entries()).map(([domainId, { domain, terms: groupTerms }]) => (
           <div key={domainId} className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="px-4 py-2 bg-blue-50 border-b text-sm font-semibold text-blue-800">{domain.name}</div>
+            <div className="px-4 py-2 bg-[var(--primary-50)] border-b text-sm font-semibold text-[var(--primary-800)]">{domain.name}</div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-slate-50 text-left">
@@ -164,7 +165,7 @@ function TermsPanel({ terms, domains, onRefresh }: { terms: GlossaryTerm[]; doma
                     <td className="px-4 py-3 font-medium">{t.term}</td>
                     <td className="px-4 py-3 text-slate-600">{t.definition}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button onClick={() => openEdit(t)} className="p-1 hover:text-blue-600"><Pencil size={15} /></button>
+                      <button onClick={() => openEdit(t)} className="p-1 hover:text-[var(--primary-600)]"><Pencil size={15} /></button>
                       <button onClick={() => remove(t.id)} className="p-1 hover:text-red-600 ml-1"><Trash2 size={15} /></button>
                     </td>
                   </tr>
@@ -191,7 +192,7 @@ function TermsPanel({ terms, domains, onRefresh }: { terms: GlossaryTerm[]; doma
                     <td className="px-4 py-3 font-medium">{t.term}</td>
                     <td className="px-4 py-3 text-slate-600">{t.definition}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button onClick={() => openEdit(t)} className="p-1 hover:text-blue-600"><Pencil size={15} /></button>
+                      <button onClick={() => openEdit(t)} className="p-1 hover:text-[var(--primary-600)]"><Pencil size={15} /></button>
                       <button onClick={() => remove(t.id)} className="p-1 hover:text-red-600 ml-1"><Trash2 size={15} /></button>
                     </td>
                   </tr>
@@ -345,10 +346,10 @@ function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: ()
   return (
     <div>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <button onClick={openCreate} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+        <button onClick={openCreate} className="flex items-center gap-2 bg-[var(--primary-600)] text-white px-4 py-2 rounded-lg text-sm hover:bg-[var(--primary-700)]">
           <Plus size={16} /> Add Domain
         </button>
-        <button onClick={() => fileRef.current?.click()} disabled={importing} className="flex items-center gap-2 border border-blue-600 text-blue-600 px-4 py-2 rounded-lg text-sm hover:bg-blue-50">
+        <button onClick={() => fileRef.current?.click()} disabled={importing} className="flex items-center gap-2 border border-[var(--primary-600)] text-[var(--primary-600)] px-4 py-2 rounded-lg text-sm hover:bg-[var(--primary-50)]">
           <Upload size={16} /> {importing ? "Importing..." : "Import JSON/CSV"}
         </button>
         <input ref={fileRef} type="file" accept=".json,.csv" onChange={handleFileUpload} className="hidden" />
@@ -358,7 +359,7 @@ function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: ()
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search domains..." className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm" />
         </div>
         {search && (
-          <button onClick={() => setSearch("")} className="text-xs text-blue-600 hover:text-blue-800">Clear</button>
+          <button onClick={() => setSearch("")} className="text-xs text-[var(--primary-600)] hover:text-[var(--primary-800)]">Clear</button>
         )}
       </div>
 
@@ -383,7 +384,7 @@ function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: ()
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={save} disabled={!name} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+            <button onClick={save} disabled={!name} className="bg-[var(--primary-600)] text-white px-4 py-2 rounded-lg text-sm hover:bg-[var(--primary-700)] disabled:opacity-50">
               {editId ? "Update" : "Add"}
             </button>
             <button onClick={() => { setShowForm(false); setEditId(null); }} className="border px-4 py-2 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
@@ -399,7 +400,7 @@ function DomainsPanel({ domains, onRefresh }: { domains: Domain[]; onRefresh: ()
               <p className="text-sm text-slate-500">{d.description}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => openEdit(d)} className="p-1.5 hover:text-blue-600 hover:bg-slate-50 rounded"><Pencil size={16} /></button>
+              <button onClick={() => openEdit(d)} className="p-1.5 hover:text-[var(--primary-600)] hover:bg-slate-50 rounded"><Pencil size={16} /></button>
               <button onClick={() => remove(d.id)} className="p-1.5 hover:text-red-600 hover:bg-slate-50 rounded"><Trash2 size={16} /></button>
             </div>
           </div>

@@ -86,7 +86,9 @@ def create_app() -> FastAPI:
                     return HTMLResponse(status_code=404)
                 html = _index_html.replace(
                     "</head>",
-                    f'<script>window.__TOOLATLAS_BASE_PATH__ = "{app_settings.base_path}";</script></head>',
+                    f'<script>window.__TOOLATLAS_BASE_PATH__ = "{app_settings.base_path}";'
+                    f'window.__TOOLATLAS_TOP_TABS__ = {("true" if app_settings.top_tabs else "false")};'
+                    f'window.__TOOLATLAS_PRIMARY_COLOR__ = "{app_settings.primary_color}";</script></head>',
                 )
                 return HTMLResponse(html)
             log.info("Serving UI from %s", p)

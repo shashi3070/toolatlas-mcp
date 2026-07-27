@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Registry sync
     registry_sync_interval: int = 30
 
+    # UI layout
+    top_tabs: bool = False
+    primary_color: str = "#2563eb"
+
     # Plugin system
     plugins: list[str] = []
     plugin_dirs: list[str] = []

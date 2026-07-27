@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Server, Shuffle, Wrench, PhoneCall, Activity, Zap, AlertTriangle } from "lucide-react";
 import { dashboardApi, type DashboardSummary } from "../api/client";
 import Loading from "../components/Loading";
+import { primary } from "../theme";
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardSummary | null>(null);
@@ -32,7 +33,7 @@ export default function Dashboard() {
   const { servers, proxies, tools, calls, latency } = data;
 
   const cards = [
-    { label: "Servers", value: servers.total, sub: `${servers.connected} connected, ${servers.disconnected} down`, icon: Server, color: "bg-blue-500" },
+    { label: "Servers", value: servers.total, sub: `${servers.connected} connected, ${servers.disconnected} down`, icon: Server, colorStyle: { backgroundColor: primary("500") } },
     { label: "Proxies", value: proxies.total, sub: `${servers.total_tools} tools across all`, icon: Shuffle, color: "bg-emerald-500" },
     { label: "Tools", value: tools.total, sub: `${calls.total} total calls`, icon: Wrench, color: "bg-amber-500" },
     { label: "Calls/min", value: calls.per_minute, sub: `${latency.avg_ms.toFixed(0)}ms avg latency`, icon: Activity, color: "bg-violet-500" },
@@ -42,9 +43,9 @@ export default function Dashboard() {
     <div>
       <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {cards.map(({ label, value, sub, icon: Icon, color }) => (
+        {cards.map(({ label, value, sub, icon: Icon, color, colorStyle }) => (
           <div key={label} className="bg-white rounded-xl shadow-sm border p-5 flex items-center gap-4">
-            <div className={`${color} rounded-lg p-3 text-white shrink-0`}>
+            <div className={`${color ? color : ""} rounded-lg p-3 text-white shrink-0`} style={colorStyle}>
               <Icon size={24} />
             </div>
             <div className="min-w-0">

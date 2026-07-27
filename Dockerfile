@@ -11,7 +11,7 @@ RUN npm run build
 FROM python:3.11-slim AS builder
 
 WORKDIR /build
-COPY --from=ui-builder /app/ui/dist src/toolatlas_mcp/ui/dist/
+COPY --from=ui-builder /app/src/toolatlas_mcp/ui/dist src/toolatlas_mcp/ui/dist/
 
 COPY pyproject.toml README.md ./
 COPY src/ src/
@@ -23,7 +23,7 @@ RUN pip install build && python -m build
 # ── Stage 3: Runtime ─────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-RUN groupadd -r toolatlas && useradd -r -g toolatlas toolatlas
+RUN groupadd -r toolatlas && useradd -r -g toolatlas toolatlas && mkdir -p /data && chown toolatlas:toolatlas /data
 
 WORKDIR /app
 

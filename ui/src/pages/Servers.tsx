@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Wifi, RefreshCw, CheckCircle, XCircle, Search, X } from "lucide-react";
 import { serversApi, type Server, type Tool } from "../api/client";
 import Loading from "../components/Loading";
+import { primary } from "../theme";
 
 export default function Servers() {
   const [servers, setServers] = useState<Server[]>([]);
@@ -118,7 +119,7 @@ export default function Servers() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Servers</h2>
-        <button onClick={openNew} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+        <button onClick={openNew} className={`flex items-center gap-2 bg-[${primary(600)}] text-white px-4 py-2 rounded-lg text-sm hover:bg-[${primary(700)}]`}>
           <Plus size={16} /> Add Server
         </button>
       </div>
@@ -168,7 +169,7 @@ export default function Servers() {
               disabled={!canSave || saving}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${
                 canSave
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  ? `bg-[${primary(600)}] text-white hover:bg-[${primary(700)}]`
                   : "bg-slate-200 text-slate-400 cursor-not-allowed"
               }`}
             >
@@ -223,7 +224,7 @@ export default function Servers() {
           <option value="stdio">STDIO</option>
         </select>
         {(search || filterTransport) && (
-          <button onClick={() => { setSearch(""); setFilterTransport(""); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+          <button onClick={() => { setSearch(""); setFilterTransport(""); }} className={`text-sm text-[${primary(600)}] hover:text-[${primary(800)}] flex items-center gap-1`}>
             <X size={14} /> Clear
           </button>
         )}
@@ -274,7 +275,7 @@ export default function Servers() {
                       load();
                     } catch {}
                   }}
-                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600"
+                  className={`flex items-center gap-1 text-xs text-slate-500 hover:text-[${primary(600)}]`}
                   title="Reconnect"
                 >
                   <RefreshCw size={12} />
@@ -283,12 +284,12 @@ export default function Servers() {
                 <button
                   onClick={() => handleDiscoverExisting(s)}
                   disabled={discoveringId === s.id}
-                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 disabled:text-slate-300"
+                  className={`flex items-center gap-1 text-sm text-[${primary(600)}] hover:text-[${primary(800)}] disabled:text-slate-300`}
                 >
                   <Wifi size={14} />
                   {discoveringId === s.id ? "Discovering..." : "Discover"}
                 </button>
-                <button onClick={() => openEdit(s)} className="p-1 hover:text-blue-600"><Pencil size={15} /></button>
+                <button onClick={() => openEdit(s)} className={`p-1 hover:text-[${primary(600)}]`}><Pencil size={15} /></button>
                 <button onClick={() => remove(s.id)} className="p-1 hover:text-red-600"><Trash2 size={15} /></button>
               </div>
             </div>

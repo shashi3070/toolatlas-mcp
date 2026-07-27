@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Server, Play, CheckCircle, XCircle, Clock, Copy, ChevronDown, ChevronRight } from "lucide-react";
 import { toolsApi, glossaryApi, type Tool, type Domain, type GlossaryTerm } from "../api/client";
 import Loading from "../components/Loading";
+import { primary } from "../theme";
 
 export default function ToolDetail() {
   const { id } = useParams<{ id: string }>();
@@ -163,13 +164,13 @@ export default function ToolDetail() {
             </pre>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border p-5 border-blue-200">
+          <div className={`bg-white rounded-xl shadow-sm border p-5 border-[${primary(200)}]`}>
             <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 bg-blue-500 rounded-full" />
+              <span className={`w-2 h-2 bg-[${primary(500)}] rounded-full`} />
               Client Preview
             </h3>
             <p className="text-xs text-slate-500 mb-2">What the client sees when listing tools</p>
-            <pre className="bg-blue-50 text-slate-800 text-xs rounded-lg p-3 overflow-x-auto whitespace-pre-wrap max-h-96">
+            <pre className={`bg-[${primary(50)}] text-slate-800 text-xs rounded-lg p-3 overflow-x-auto whitespace-pre-wrap max-h-96`}>
 {JSON.stringify({
   name: tool.name,
   description: clientPreview || tool.description,
@@ -380,7 +381,7 @@ export default function ToolDetail() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            className={`w-full bg-[${primary(600)}] text-white py-2.5 rounded-lg text-sm font-medium hover:bg-[${primary(700)}] disabled:opacity-50`}
           >
             {saving ? "Saving..." : saved ? "Saved ✓" : "Save Changes"}
           </button>
@@ -399,7 +400,7 @@ function CopyButton({ text }: { text: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       }}
-      className="p-1 hover:text-blue-600 shrink-0"
+      className={`p-1 hover:text-[${primary(600)}] shrink-0`}
       title={copied ? "Copied!" : "Copy"}
     >
       {copied ? <CheckCircle size={14} className="text-green-500" /> : <Copy size={14} className="text-slate-400" />}
@@ -441,7 +442,7 @@ function ToolResult({ data }: { data: Record<string, unknown> }) {
               {item.text.length > 1000 && (
                 <button
                   onClick={() => setExpanded((prev) => ({ ...prev, [i]: !prev[i] }))}
-                  className="text-blue-600 hover:text-blue-800 text-xs mt-1"
+                  className={`text-[${primary(600)}] hover:text-[${primary(800)}] text-xs mt-1`}
                 >
                   {expanded[i] ? "Show less" : "Show more"}
                 </button>

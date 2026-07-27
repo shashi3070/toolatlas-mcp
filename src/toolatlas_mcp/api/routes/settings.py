@@ -15,5 +15,7 @@ async def get_settings():
         "storage_type": settings.storage_type,
         "log_level": settings.log_level,
         "is_db_backend": settings.is_db_backend,
+        "top_tabs": settings.top_tabs,
+        "primary_color": settings.primary_color,
         "cache": get_cache_stats(),
     }
