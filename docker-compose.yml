@@ -15,7 +15,6 @@ services:
       TOOLATLAS_LOG_LEVEL: "INFO"
       TOOLATLAS_TOP_TABS: "true"
       TOOLATLAS_PRIMARY_COLOR: "#6832ba"
-      TOOLATLAS_DATA_DIR: "/data"
     restart: unless-stopped
 
 volumes:

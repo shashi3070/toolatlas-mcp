@@ -28,7 +28,7 @@ RUN groupadd -r toolatlas && useradd -r -g toolatlas toolatlas && mkdir -p /data
 WORKDIR /app
 
 COPY --from=builder /build/dist/*.whl /tmp/
-RUN pip install /tmp/*.whl && rm /tmp/*.whl
+RUN pip install /tmp/*.whl asyncpg && rm /tmp/*.whl
 
 USER toolatlas
 
@@ -39,6 +39,7 @@ VOLUME ["/data"]
 ENV TOOLATLAS_HOST=0.0.0.0
 ENV TOOLATLAS_PORT=8081
 ENV TOOLATLAS_STORAGE_TYPE=json
+ENV TOOLATLAS_DATA_DIR=/data
 ENV TOOLATLAS_DATABASE_URL=sqlite+aiosqlite:////data/toolatlas.db
 
 ENTRYPOINT ["toolatlas"]

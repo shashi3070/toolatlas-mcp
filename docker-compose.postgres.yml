@@ -10,6 +10,8 @@ services:
       POSTGRES_DB: toolatlas
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U toolatlas"]
       interval: 5s
@@ -27,9 +29,11 @@ services:
     environment:
       TOOLATLAS_HOST: "0.0.0.0"
       TOOLATLAS_PORT: "8081"
-      TOOLATLAS_STORAGE_TYPE: "sqlite"
-      TOOLATLAS_DATABASE_URL: "postgresql+asyncpg://toolatlas:toolatlas@postgres:5432/toolatlas"
+      TOOLATLAS_STORAGE_TYPE: "postgres"
+      TOOLATLAS_DATABASE_URL: "postgresql+asyncpg://toolatlas:toolatlas@postgres:5432/toolatlas?currentSchema=toolatlas"
       TOOLATLAS_LOG_LEVEL: "INFO"
+      # TOOLATLAS_TOP_TABS: "true"
+      TOOLATLAS_PRIMARY_COLOR: "#1dba44"
     restart: unless-stopped
 
 volumes:
