@@ -45,6 +45,7 @@ class ConnectionManager:
                 transport=server.get("transport", "sse"),
                 command=server.get("command"),
                 url=server.get("url"),
+                headers=server.get("headers"),
             )
             for attempt in range(3):
                 try:

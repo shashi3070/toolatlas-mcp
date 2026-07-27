@@ -20,7 +20,7 @@ async def _ping_server(storage: StorageBackend, server: dict) -> dict | None:
     url = server.get("url")
     name = server.get("name", "?")
 
-    client = MCPClient(transport=transport, command=command, url=url)
+    client = MCPClient(transport=transport, command=command, url=url, headers=server.get("headers"))
     start = time.monotonic()
     try:
         await client.connect()

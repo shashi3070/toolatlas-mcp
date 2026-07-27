@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Wifi, RefreshCw, CheckCircle, XCircle, Search, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Wifi, RefreshCw, CheckCircle, XCircle, Search, X, PlusCircle, MinusCircle } from "lucide-react";
 import { serversApi, type Server, type Tool } from "../api/client";
 import Loading from "../components/Loading";
 import { primary } from "../theme";
@@ -12,6 +12,7 @@ export default function Servers() {
   const [name, setName] = useState("");
   const [transport, setTransport] = useState("sse");
   const [url, setUrl] = useState("");
+  const [headers, setHeaders] = useState<[string, string][]>([]);
 
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
@@ -41,6 +42,7 @@ export default function Servers() {
     setName("");
     setTransport("sse");
     setUrl("");
+    setHeaders([]);
     setPreviewTools(null);
     setDiscoverError("");
     setShowForm(true);
@@ -51,6 +53,7 @@ export default function Servers() {
     setName(s.name);
     setTransport(s.transport);
     setUrl(s.url || "");
+    setHeaders(Object.entries(s.headers || {}));
     setPreviewTools(null);
     setDiscoverError("");
     setShowForm(true);
@@ -61,7 +64,8 @@ export default function Servers() {
     setDiscoverError("");
     setPreviewTools(null);
     try {
-      const tools = await serversApi.discoverPreview({ transport, url });
+      const h = Object.fromEntries(headers.filter(([k]) => k.trim()));
+      const tools = await serversApi.discoverPreview({ transport, url, headers: Object.keys(h).length ? h : undefined });
       setPreviewTools(tools);
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e.message;
@@ -75,10 +79,12 @@ export default function Servers() {
     setSaving(true);
     try {
       let server: Server;
+      const h = Object.fromEntries(headers.filter(([k]) => k.trim()));
+      const body = { name, transport, url, headers: Object.keys(h).length ? h : undefined };
       if (editing) {
-        server = await serversApi.update(editing.id, { name, transport, url });
+        server = await serversApi.update(editing.id, body);
       } else {
-        server = await serversApi.create({ name, transport, url });
+        server = await serversApi.create(body as any);
       }
       const tools = await serversApi.discover(server.id);
       setDiscoveredTools((prev) => ({ ...prev, [server.id]: tools }));
@@ -152,6 +158,30 @@ export default function Servers() {
                 <input value={url} onChange={(e) => { setUrl(e.target.value); setPreviewTools(null); setDiscoverError(""); }} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="npx -y @modelcontextprotocol/server-github" />
               </div>
             )}
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Headers</label>
+            <div className="space-y-2">
+              {headers.map(([k, v], i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={k} onChange={(e) => { const h = [...headers]; h[i][0] = e.target.value; setHeaders(h); }}
+                    className="w-2/5 border rounded-lg px-3 py-2 text-sm font-mono" placeholder="Authorization"
+                  />
+                  <input
+                    value={v} onChange={(e) => { const h = [...headers]; h[i][1] = e.target.value; setHeaders(h); }}
+                    className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono" placeholder="Bearer sk-..."
+                  />
+                  <button onClick={() => setHeaders(headers.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700">
+                    <MinusCircle size={18} />
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => setHeaders([...headers, ["", ""]])} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+                <PlusCircle size={16} /> Add Header
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3 mb-4">

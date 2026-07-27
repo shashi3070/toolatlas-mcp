@@ -20,7 +20,7 @@ class StorageBackend:
     async def commit(self):
         pass
 
-    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> Any:
+    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None, headers: dict[str, str] | None = None) -> Any:
         raise NotImplementedError
 
     async def list_servers(self) -> list[Any]:

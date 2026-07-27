@@ -87,6 +87,7 @@ class JSONStorage(StorageBackend):
             "last_heartbeat": s.get("last_heartbeat"),
             "last_tool_sync": s.get("last_tool_sync"),
             "tool_hash": s.get("tool_hash"),
+            "headers": s.get("headers") or {},
             "created_at": s.get("created_at"),
             "updated_at": s.get("updated_at"),
         }
@@ -108,7 +109,7 @@ class JSONStorage(StorageBackend):
 
     # ---- Servers ----
 
-    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> dict:
+    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None, headers: dict[str, str] | None = None) -> dict:
         async with self._lock:
             server = {
                 "id": _uuid(),
@@ -123,6 +124,7 @@ class JSONStorage(StorageBackend):
                 "last_heartbeat": None,
                 "last_tool_sync": None,
                 "tool_hash": None,
+                "headers": headers or {},
                 "created_at": _utcnow(),
                 "updated_at": _utcnow(),
             }

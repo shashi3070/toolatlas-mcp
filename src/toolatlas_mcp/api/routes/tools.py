@@ -113,7 +113,7 @@ async def test_tool(tool_id: str, body: ToolTestRequest, storage: StorageBackend
     if not server:
         raise HTTPException(404, "Server not found for this tool")
 
-    client = MCPClient(transport=server.get("transport", "sse"), command=server.get("command"), url=server.get("url"))
+    client = MCPClient(transport=server.get("transport", "sse"), command=server.get("command"), url=server.get("url"), headers=server.get("headers"))
     start = time.monotonic()
     try:
         await client.connect()

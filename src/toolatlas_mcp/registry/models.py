@@ -34,6 +34,7 @@ class Server(Base):
     last_heartbeat = Column(DateTime, nullable=True)
     last_tool_sync = Column(DateTime, nullable=True)
     tool_hash = Column(String, nullable=True)
+    headers = Column(JSON, default=dict, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 

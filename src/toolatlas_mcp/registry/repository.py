@@ -50,8 +50,8 @@ class RegistryRepository(StorageBackend):
 
     # ---- Servers ----
 
-    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> dict:
-        server = Server(name=name, transport=transport, command=command, url=url)
+    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None, headers: dict[str, str] | None = None) -> dict:
+        server = Server(name=name, transport=transport, command=command, url=url, headers=headers or {})
         self.db.add(server)
         await self.commit()
         return _model_to_dict(server)

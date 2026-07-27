@@ -149,6 +149,7 @@ async def _migrate_schema(conn, dialect: str):
     migrations = [
         ("servers", "tool_hash", "VARCHAR"),
         ("servers", "last_tool_sync", "DATETIME"),
+        ("servers", "headers", "JSON"),
         ("tool_calls", "events", "JSON"),
     ]
     for table, col, coltype in migrations:

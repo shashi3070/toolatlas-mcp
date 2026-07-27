@@ -20,6 +20,7 @@ export type Server = {
   reconnect_count: number;
   last_heartbeat?: string;
   last_tool_sync?: string;
+  headers?: Record<string, string>;
   created_at?: string;
   updated_at?: string;
 };
@@ -136,14 +137,14 @@ export type ToolTestResponse = {
 export const serversApi = {
   list: () => api.get<Server[]>("/servers").then((r) => r.data),
   get: (id: string) => api.get<Server>(`/servers/${id}`).then((r) => r.data),
-  create: (data: { name: string; transport?: string; command?: string; url?: string }) =>
+  create: (data: { name: string; transport?: string; command?: string; url?: string; headers?: Record<string, string> }) =>
     api.post<Server>("/servers", data).then((r) => r.data),
   update: (id: string, data: Partial<Server>) =>
     api.patch<Server>(`/servers/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/servers/${id}`),
   discover: (id: string) =>
     api.post<Tool[]>(`/servers/${id}/discover`).then((r) => r.data),
-  discoverPreview: (data: { transport?: string; command?: string; url?: string }) =>
+  discoverPreview: (data: { transport?: string; command?: string; url?: string; headers?: Record<string, string> }) =>
     api.post<{ name: string; description: string; input_schema: Record<string, unknown> }[]>("/servers/discover-preview", data).then((r) => r.data),
   ping: (id: string) =>
     api.post<{ id: string; status: string; latency_ms?: number; connection_status: string; error?: string }>(`/servers/${id}/ping`).then((r) => r.data),
