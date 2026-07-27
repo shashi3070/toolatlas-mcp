@@ -52,7 +52,7 @@ export default function Servers() {
     setEditing(s);
     setName(s.name);
     setTransport(s.transport);
-    setUrl(s.url || "");
+    setUrl(s.url || s.command || "");
     setHeaders(Object.entries(s.headers || {}));
     setPreviewTools(null);
     setDiscoverError("");
@@ -65,7 +65,13 @@ export default function Servers() {
     setPreviewTools(null);
     try {
       const h = Object.fromEntries(headers.filter(([k]) => k.trim()));
-      const tools = await serversApi.discoverPreview({ transport, url, headers: Object.keys(h).length ? h : undefined });
+      const isStdio = transport === "stdio";
+      const tools = await serversApi.discoverPreview({
+        transport,
+        url: isStdio ? undefined : url,
+        command: isStdio ? url : undefined,
+        headers: Object.keys(h).length ? h : undefined,
+      });
       setPreviewTools(tools);
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e.message;
@@ -80,7 +86,13 @@ export default function Servers() {
     try {
       let server: Server;
       const h = Object.fromEntries(headers.filter(([k]) => k.trim()));
-      const body = { name, transport, url, headers: Object.keys(h).length ? h : undefined };
+      const isStdio = transport === "stdio";
+      const body = {
+        name, transport,
+        url: isStdio ? undefined : url,
+        command: isStdio ? url : undefined,
+        headers: Object.keys(h).length ? h : undefined,
+      };
       if (editing) {
         server = await serversApi.update(editing.id, body);
       } else {

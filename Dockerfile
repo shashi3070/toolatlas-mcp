@@ -11,12 +11,13 @@ RUN npm run build
 FROM python:3.11-slim AS builder
 
 WORKDIR /build
-COPY --from=ui-builder /app/src/toolatlas_mcp/ui/dist src/toolatlas_mcp/ui/dist/
 
 COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY docs/ docs/
 COPY examples/ examples/
+
+COPY --from=ui-builder /app/src/toolatlas_mcp/ui/dist src/toolatlas_mcp/ui/dist/
 
 RUN pip install build && python -m build
 
