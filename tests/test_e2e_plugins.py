@@ -1,12 +1,27 @@
 """End-to-end test for plugin governance and abort through the proxy message endpoint."""
 
 import uuid
+from contextlib import asynccontextmanager
 
 import pytest
 from httpx import AsyncClient
 
 from toolatlas_mcp.plugin.base import Plugin, PluginAbortError, PluginContext
 from toolatlas_mcp.plugin.manager import plugin_manager
+
+
+def _storage_from_client(seeded_client):
+    """Return an async-context-manager for the storage backend used by *seeded_client*.
+
+    The *seeded_client* fixture creates an isolated in-memory SQLite DB and
+    registers a ``dependency_overrides[get_storage]`` against it.  This helper
+    extracts that override so tests can create ``ProxyEngine`` instances that
+    share the same database, avoiding the broken ``anext(get_storage())``
+    pattern which hit a fresh (empty) storage backend.
+    """
+    from toolatlas_mcp.db import get_storage
+    override = seeded_client._transport.app.dependency_overrides[get_storage]
+    return asynccontextmanager(override)()
 
 
 class BlockDeletePlugin(Plugin):
@@ -107,16 +122,13 @@ class TestPluginE2E:
         # We verify the engine correctly converts PluginAbortError -> PermissionError -> -32001
         # by checking that the tool call raises PermissionError when we call engine directly.
         from toolatlas_mcp.proxy.engine import ProxyEngine
-        from toolatlas_mcp.db import get_storage
 
-        storage = await anext(get_storage())
-        try:
+        async with _storage_from_client(seeded_client) as storage:
             engine = ProxyEngine(storage)
             await engine.initialize_proxy(slug)
             with pytest.raises(PermissionError) as excinfo:
                 await engine.call_tool(slug, "delete_repo", {})
             assert "not authorized" in str(excinfo.value).lower() or "blocked" in str(excinfo.value).lower()
-        finally:
             engine.close()
 
     async def test_plugin_appends_to_response(self, seeded_client: AsyncClient):
@@ -138,10 +150,8 @@ class TestPluginE2E:
         await asyncio.sleep(0.3)
 
         from toolatlas_mcp.proxy.engine import ProxyEngine
-        from toolatlas_mcp.db import get_storage
 
-        storage = await anext(get_storage())
-        try:
+        async with _storage_from_client(seeded_client) as storage:
             engine = ProxyEngine(storage)
             await engine.initialize_proxy(slug)
             result = await engine.call_tool(slug, "search_code", {"query": "test"})
@@ -151,7 +161,6 @@ class TestPluginE2E:
                 for c in result.get("content", [])
             )
             assert has_appended, f"Expected appended text in result: {result}"
-        finally:
             engine.close()
 
     async def test_plugin_tool_filter_hides_tools(self, seeded_client: AsyncClient):
@@ -162,15 +171,12 @@ class TestPluginE2E:
         slug = await self._create_test_proxy(seeded_client, "filter")
 
         from toolatlas_mcp.proxy.engine import ProxyEngine
-        from toolatlas_mcp.db import get_storage
 
-        storage = await anext(get_storage())
-        try:
+        async with _storage_from_client(seeded_client) as storage:
             engine = ProxyEngine(storage)
             await engine.initialize_proxy(slug)
             tools = await engine.list_tools(slug)
             names = [t["name"] for t in tools]
             has_delete = any("delete" in n.lower() for n in names)
             assert not has_delete, f"delete_* tools should be filtered: {names}"
-        finally:
             engine.close()

@@ -121,11 +121,13 @@ async def get_proxy_tools(proxy_id: str, storage: StorageBackend = Depends(get_s
     if not proxy:
         raise HTTPException(404, "Proxy not found")
     servers = await storage.get_proxy_servers(proxy_id)
+    tool_settings = await storage.get_tool_settings_for_proxy(proxy_id)
+    glossary_terms = {gt["id"]: gt for gt in await storage.list_glossary_terms()}
     tools = []
     for server in servers:
         server_tools = await storage.list_tools(server_id=server.get("id"))
         for t in server_tools:
-            setting = await storage.get_tool_setting(proxy_id, t.get("id", ""))
+            setting = tool_settings.get(t.get("id", ""))
             display_desc = setting.get("custom_description") if setting and setting.get("custom_description") else t.get("description", "")
 
             enrichment = []
@@ -141,7 +143,7 @@ async def get_proxy_tools(proxy_id: str, storage: StorageBackend = Depends(get_s
             if isinstance(gt_ids, str):
                 gt_ids = [gt_ids]
             for gid in gt_ids:
-                gt = await storage.get_glossary_term(gid)
+                gt = glossary_terms.get(gid)
                 if gt:
                     enrichment.append(f"Glossary: {gt.get('definition') or gt.get('term')}")
             if enrichment:

@@ -1,7 +1,8 @@
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-from sqlalchemy import event, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
@@ -43,9 +44,15 @@ def _create_engine():
     schema_name = None
     if is_pg:
         db_url, schema_name = _parse_current_schema(db_url)
+    connect_args: dict = {"command_timeout": 10} if is_pg else {"timeout": 10}
+    if is_pg and schema_name:
+        # asyncpg supports server_settings at connection startup (like libpq's
+        # startup packet), which is more robust under connection poolers than
+        # issuing SET search_path via a connect event hook.
+        connect_args["server_settings"] = {"search_path": f"{schema_name},public"}
     engine_kwargs: dict = {
         "echo": False,
-        "connect_args": {"command_timeout": 10} if is_pg else {"timeout": 10},
+        "connect_args": connect_args,
     }
     if is_pg:
         engine_kwargs["poolclass"] = AsyncAdaptedQueuePool
@@ -53,14 +60,7 @@ def _create_engine():
         engine_kwargs["max_overflow"] = 20
     else:
         engine_kwargs["poolclass"] = NullPool
-    engine = create_async_engine(db_url, **engine_kwargs)
-    if is_pg and schema_name:
-        @event.listens_for(engine.sync_engine, "connect")
-        def _set_search_path(dbapi_conn, _):
-            cursor = dbapi_conn.cursor()
-            cursor.execute(f"SET search_path TO {schema_name}, public")
-            cursor.close()
-    return engine
+    return create_async_engine(db_url, **engine_kwargs)
 
 
 _engine = None
@@ -106,6 +106,17 @@ async def get_storage() -> AsyncGenerator[StorageBackend, None]:
         factory = _get_session_factory()
         async with factory() as session:
             yield RegistryRepository(session)
+
+
+def get_storage_ctx():
+    """Return an async-context-manager version of *get_storage*.
+
+    Wraps the async-generator so it can be safely used with ``async with``
+    from non-FastAPI code (background tasks, etc.) without the risk of
+    leaving the generator's ``finally`` / session cleanup unexited when the
+    calling task is cancelled between ``__anext__()`` calls.
+    """
+    return asynccontextmanager(get_storage)()
 
 
 async def _get_existing_columns(conn, dialect: str) -> dict[str, set[str]]:

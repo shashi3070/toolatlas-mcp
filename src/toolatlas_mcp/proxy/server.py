@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from toolatlas_mcp import __version__
-from toolatlas_mcp.db import get_storage
+from toolatlas_mcp.db import get_storage, get_storage_ctx
 from toolatlas_mcp.plugin.base import PluginAbortError, PluginContext
 from toolatlas_mcp.plugin.manager import plugin_manager
 from toolatlas_mcp.proxy.engine import ProxyEngine
@@ -127,15 +127,22 @@ async def _get_engine(slug: str, storage) -> ProxyEngine:
         return engine
 
 
-async def _warmup_single_proxy(slug: str, storage):
-    """Warm up a single proxy's cache."""
-    try:
-        engine = await _get_engine(slug, storage)
-        tools = await engine.list_tools(slug)
-        _tools_cache[slug] = (time.time(), tools)
-        log.info("Warmed cache for proxy '%s' (%d tools)", slug, len(tools))
-    except Exception as e:
-        log.debug("Cache warmup skipped for '%s': %s", slug, e)
+async def _warmup_single_proxy(slug: str):
+    """Warm up a single proxy's cache with its own DB session.
+
+    ``warmup_proxy_caches`` fires off one task per proxy via
+    ``asyncio.gather`` — they run concurrently, so each task must use
+    its own ``AsyncSession`` to avoid corrupting the shared identity map
+    and transaction state.
+    """
+    async with get_storage_ctx() as storage:
+        try:
+            engine = await _get_engine(slug, storage)
+            tools = await engine.list_tools(slug)
+            _tools_cache[slug] = (time.time(), tools)
+            log.info("Warmed cache for proxy '%s' (%d tools)", slug, len(tools))
+        except Exception as e:
+            log.debug("Cache warmup skipped for '%s': %s", slug, e)
 
 
 async def warmup_proxy_caches(storage):
@@ -144,7 +151,7 @@ async def warmup_proxy_caches(storage):
         proxies = await storage.list_proxies()
     except Exception:
         return
-    tasks = [_warmup_single_proxy(p["slug"], storage) for p in proxies]
+    tasks = [_warmup_single_proxy(p["slug"]) for p in proxies]
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 

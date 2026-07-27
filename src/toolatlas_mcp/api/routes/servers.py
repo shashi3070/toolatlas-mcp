@@ -147,13 +147,16 @@ async def discover_server_tools(server_id: str, storage: StorageBackend = Depend
         log.warning("Failed to discover tools from '%s': %s", server["name"], e)
         raise HTTPException(502, f"Failed to connect to server: {e}")
 
-    for rt in remote_tools:
-        await storage.upsert_tool(
-            server_id=server["id"],
-            name=rt.get("name", ""),
-            description=rt.get("description", ""),
-            input_schema=rt.get("inputSchema", {}),
-        )
+    await storage.upsert_tools(
+        server_id=server["id"],
+        tools=[
+            {"name": rt.get("name", ""), "description": rt.get("description", ""),
+             "input_schema": rt.get("inputSchema", {})}
+            for rt in remote_tools
+        ],
+        auto_commit=False,
+    )
+    await storage.commit()
 
     from datetime import datetime, timezone
     await storage.update_server(

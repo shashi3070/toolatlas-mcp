@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useSearchParams } from "react-router-dom";
+import { NavLink, Outlet, useSearchParams, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Server, Shuffle, Wrench, BookOpen, BarChart3, Share2,
 } from "lucide-react";
@@ -23,12 +23,13 @@ const navItems = [
 const topTabs = window.__TOOLATLAS_TOP_TABS__ || false;
 
 function NavLinks() {
+  const location = useLocation();
   return (
     <>
       {navItems.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
-          to={to}
+          to={{ pathname: to, search: location.search }}
           end={to === "/"}
           className={({ isActive }) =>
             topTabs
@@ -80,7 +81,7 @@ export default function Layout() {
             <NavLinks />
           </nav>
         </header>
-        <main className="flex-1 overflow-auto p-6 bg-slate-50">
+        <main className={`flex-1 overflow-auto bg-slate-50 ${embed ? "p-2" : "p-6"}`}>
           <Outlet />
         </main>
       </div>
@@ -104,7 +105,7 @@ export default function Layout() {
           v3.0.4
         </div>
       </aside>
-      <main className="flex-1 overflow-auto p-6 bg-slate-50">
+      <main className={`flex-1 overflow-auto bg-slate-50 ${embed ? "p-2" : "p-6"}`}>
         <Outlet />
       </main>
     </div>

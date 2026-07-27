@@ -156,13 +156,65 @@ class RegistryRepository(StorageBackend):
         await self.commit()
         return _model_to_dict(tool)
 
-    async def delete_tool(self, tool_id: str) -> bool:
+    async def delete_tool(self, tool_id: str, auto_commit: bool = True) -> bool:
         tool = await self.db.get(Tool, tool_id)
         if not tool:
             return False
         await self.db.delete(tool)
-        await self.commit()
+        if auto_commit:
+            await self.commit()
         return True
+
+    async def upsert_tools(self, server_id: str, tools: list[dict], auto_commit: bool = True) -> list[dict]:
+        result = await self.db.execute(
+            select(Tool).where(Tool.server_id == server_id)
+        )
+        existing_by_name: dict[str, Tool] = {t.name: t for t in result.scalars().all()}
+        db_tools = []
+        for rt in tools:
+            name = rt.get("name", "")
+            description = rt.get("description", "")
+            input_schema = rt.get("input_schema", {}) or rt.get("inputSchema", {})
+            tool = existing_by_name.get(name)
+            if tool:
+                if not tool.original_description:
+                    tool.original_description = description
+                if not tool.description or tool.description == tool.original_description:
+                    tool.description = description
+                if input_schema:
+                    tool.input_schema = input_schema
+                tool.updated_at = _utcnow()
+            else:
+                tool = Tool(
+                    server_id=server_id, name=name, original_name=name,
+                    original_description=description, description=description,
+                    input_schema=input_schema,
+                )
+                self.db.add(tool)
+            db_tools.append(tool)
+        if auto_commit:
+            await self.commit()
+        return [_model_to_dict(t) for t in db_tools]
+
+    async def delete_tools(self, tool_ids: list[str], auto_commit: bool = True) -> int:
+        result = await self.db.execute(
+            delete(Tool).where(Tool.id.in_(tool_ids))
+        )
+        if auto_commit:
+            await self.commit()
+        return result.rowcount
+
+    async def get_tool_settings_for_proxy(self, proxy_id: str) -> dict[str, Any]:
+        result = await self.db.execute(
+            select(ProxyToolSetting).where(ProxyToolSetting.proxy_id == proxy_id)
+        )
+        return {s.tool_id: _model_to_dict(s) for s in result.scalars().all()}
+
+    async def get_proxy_server_selections(self, proxy_id: str) -> dict[str, list[str] | None]:
+        result = await self.db.execute(
+            select(ProxyServer).where(ProxyServer.proxy_id == proxy_id)
+        )
+        return {ps.server_id: ps.selected_tools for ps in result.scalars().all()}
 
     # ---- Proxies ----
 

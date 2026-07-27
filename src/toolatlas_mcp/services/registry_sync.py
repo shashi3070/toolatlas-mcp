@@ -104,24 +104,28 @@ class RegistrySyncService:
         existing_by_name: dict[str, Any] = {t["name"]: t for t in existing_tools}
         remote_names = {t["name"] for t in remote_tools}
 
-        for rt in remote_tools:
-            db_tool = await storage.upsert_tool(
-                server_id=server["id"],
-                name=rt.get("name", ""),
-                description=rt.get("description", ""),
-                input_schema=rt.get("inputSchema", {}),
-                auto_commit=False,
-            )
-            if rt["name"] not in existing_by_name:
-                result["added"].append(rt["name"])
+        db_tools = await storage.upsert_tools(
+            server_id=server["id"],
+            tools=[
+                {"name": rt.get("name", ""), "description": rt.get("description", ""),
+                 "input_schema": rt.get("inputSchema", {})}
+                for rt in remote_tools
+            ],
+            auto_commit=False,
+        )
+        for dt, rt in zip(db_tools, remote_tools):
+            name = rt["name"]
+            if name not in existing_by_name:
+                result["added"].append(name)
             else:
-                result["updated"].append(rt["name"])
+                result["updated"].append(name)
 
         # Removed tools
-        for name, existing in existing_by_name.items():
-            if name not in remote_names:
-                await storage.delete_tool(existing["id"])
-                result["removed"].append(name)
+        removed_names = [name for name in existing_by_name if name not in remote_names]
+        removed_ids = [existing_by_name[name]["id"] for name in removed_names]
+        if removed_ids:
+            await storage.delete_tools(removed_ids, auto_commit=False)
+            result["removed"] = removed_names
 
         await storage.commit()
 

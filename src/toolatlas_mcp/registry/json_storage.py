@@ -247,14 +247,74 @@ class JSONStorage(StorageBackend):
                     return self._tool_to_dict(t)
             return None
 
-    async def delete_tool(self, tool_id: str) -> bool:
+    async def delete_tool(self, tool_id: str, auto_commit: bool = True) -> bool:
         async with self._lock:
             before = len(self._data["tools"])
             self._data["tools"] = [t for t in self._data["tools"] if t["id"] != tool_id]
             if len(self._data["tools"]) < before:
-                await self._save()
+                if auto_commit:
+                    await self._save()
                 return True
             return False
+
+    async def upsert_tools(self, server_id: str, tools: list[dict], auto_commit: bool = True) -> list[dict]:
+        async with self._lock:
+            existing_by_name = {
+                t["name"]: t for t in self._data["tools"]
+                if t["server_id"] == server_id
+            }
+            result = []
+            for rt in tools:
+                name = rt.get("name", "")
+                description = rt.get("description", "")
+                input_schema = rt.get("input_schema", {}) or rt.get("inputSchema", {})
+                tool = existing_by_name.get(name)
+                if tool:
+                    if not tool.get("original_description"):
+                        tool["original_description"] = description
+                    if not tool.get("description") or tool["description"] == tool.get("original_description"):
+                        tool["description"] = description
+                    if input_schema:
+                        tool["input_schema"] = input_schema
+                    tool["updated_at"] = _utcnow()
+                else:
+                    tool = {
+                        "id": _uuid(), "server_id": server_id, "name": name,
+                        "original_name": name, "original_description": description,
+                        "description": description, "input_schema": input_schema,
+                        "enabled": True, "tags": [], "domain": [],
+                        "glossary_term_ids": [],
+                        "created_at": _utcnow(), "updated_at": _utcnow(),
+                    }
+                    self._data["tools"].append(tool)
+                result.append(self._tool_to_dict(tool))
+            if auto_commit:
+                await self._save()
+            return result
+
+    async def delete_tools(self, tool_ids: list[str], auto_commit: bool = True) -> int:
+        async with self._lock:
+            before = len(self._data["tools"])
+            id_set = set(tool_ids)
+            self._data["tools"] = [t for t in self._data["tools"] if t["id"] not in id_set]
+            removed = before - len(self._data["tools"])
+            if removed and auto_commit:
+                await self._save()
+            return removed
+
+    async def get_tool_settings_for_proxy(self, proxy_id: str) -> dict[str, Any]:
+        return {
+            ts["tool_id"]: dict(ts)
+            for ts in self._data["proxy_tool_settings"]
+            if ts["proxy_id"] == proxy_id
+        }
+
+    async def get_proxy_server_selections(self, proxy_id: str) -> dict[str, list[str] | None]:
+        return {
+            ps["server_id"]: ps.get("selected_tools")
+            for ps in self._data["proxy_servers"]
+            if ps["proxy_id"] == proxy_id
+        }
 
     # ---- Proxies ----
 

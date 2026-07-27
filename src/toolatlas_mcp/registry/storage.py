@@ -53,7 +53,19 @@ class StorageBackend:
     async def update_tool(self, tool_id: str, **kwargs) -> Any | None:
         raise NotImplementedError
 
-    async def delete_tool(self, tool_id: str) -> bool:
+    async def delete_tool(self, tool_id: str, auto_commit: bool = True) -> bool:
+        raise NotImplementedError
+
+    async def upsert_tools(self, server_id: str, tools: list[dict], auto_commit: bool = True) -> list[Any]:
+        raise NotImplementedError
+
+    async def delete_tools(self, tool_ids: list[str], auto_commit: bool = True) -> int:
+        raise NotImplementedError
+
+    async def get_tool_settings_for_proxy(self, proxy_id: str) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def get_proxy_server_selections(self, proxy_id: str) -> dict[str, list[str] | None]:
         raise NotImplementedError
 
     async def create_proxy(self, name: str, slug: str, description: str = "") -> Any:
