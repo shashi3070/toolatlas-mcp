@@ -118,12 +118,11 @@ class RegistryRepository(StorageBackend):
         return result.scalar() or 0
 
     async def delete_server(self, server_id: str) -> bool:
-        server = await self.db.get(Server, server_id)
-        if not server:
-            return False
-        await self.db.delete(server)
+        # Use bulk DELETE — DB-level ON DELETE CASCADE handles tools,
+        # proxy_links, proxy_tool_settings, and SET NULL on calls.
+        result = await self.db.execute(delete(Server).where(Server.id == server_id))
         await self.commit()
-        return True
+        return bool(result.rowcount)  # type: ignore[attr-defined]
 
     # ---- Tools ----
 
@@ -187,13 +186,10 @@ class RegistryRepository(StorageBackend):
         return _model_to_dict(tool)
 
     async def delete_tool(self, tool_id: str, auto_commit: bool = True) -> bool:
-        tool = await self.db.get(Tool, tool_id)
-        if not tool:
-            return False
-        await self.db.delete(tool)
+        result = await self.db.execute(delete(Tool).where(Tool.id == tool_id))
         if auto_commit:
             await self.commit()
-        return True
+        return bool(result.rowcount)  # type: ignore[attr-defined]
 
     async def upsert_tools(
         self, server_id: str, tools: list[dict], auto_commit: bool = True,
@@ -291,12 +287,9 @@ class RegistryRepository(StorageBackend):
         return result.scalar() or 0
 
     async def delete_proxy(self, proxy_id: str) -> bool:
-        proxy = await self.db.get(Proxy, proxy_id)
-        if not proxy:
-            return False
-        await self.db.delete(proxy)
+        result = await self.db.execute(delete(Proxy).where(Proxy.id == proxy_id))
         await self.commit()
-        return True
+        return bool(result.rowcount)  # type: ignore[attr-defined]
 
     # ---- Proxy-Server links ----
 
@@ -472,15 +465,10 @@ class RegistryRepository(StorageBackend):
         return _model_to_dict(domain)
 
     async def delete_domain(self, domain_id: str) -> bool:
-        domain = await self.db.get(Domain, domain_id)
-        if not domain:
-            return False
-        await self.db.execute(
-            delete(GlossaryTerm).where(GlossaryTerm.domain_id == domain_id)
-        )
-        await self.db.delete(domain)
+        # Glossary terms are cascade-deleted by DB (ON DELETE CASCADE)
+        result = await self.db.execute(delete(Domain).where(Domain.id == domain_id))
         await self.commit()
-        return True
+        return bool(result.rowcount)  # type: ignore[attr-defined]
 
     async def bulk_import_glossary(self, data: list[dict]) -> dict:
         created_domains = 0
