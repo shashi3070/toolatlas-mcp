@@ -16,7 +16,7 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
-def _serialize(obj: Any) -> str:
+def _serialize(obj: Any) -> Any:
     if isinstance(obj, datetime):
         return obj.isoformat()
     if isinstance(obj, uuid.UUID):
@@ -135,6 +135,17 @@ class JSONStorage(StorageBackend):
     async def list_servers(self) -> list[dict]:
         return [self._server_to_dict(s) for s in self._data["servers"]]
 
+    async def count_servers(self) -> dict[str, int]:
+        servers = self._data["servers"]
+        connected = sum(1 for s in servers if s.get("connection_status") == "connected")
+        disconnected = sum(1 for s in servers if s.get("connection_status") == "disconnected")
+        return {
+            "total": len(servers),
+            "connected": connected,
+            "disconnected": disconnected,
+            "unknown": len(servers) - connected - disconnected,
+        }
+
     async def get_server(self, server_id: str) -> dict | None:
         for s in self._data["servers"]:
             if s["id"] == server_id:
@@ -230,6 +241,9 @@ class JSONStorage(StorageBackend):
         if server_id:
             tools = [t for t in tools if t["server_id"] == server_id]
         return [self._tool_to_dict(t) for t in tools]
+
+    async def count_tools(self) -> int:
+        return len(self._data["tools"])
 
     async def get_tool(self, tool_id: str) -> dict | None:
         for t in self._data["tools"]:
@@ -336,6 +350,9 @@ class JSONStorage(StorageBackend):
 
     async def list_proxies(self) -> list[dict]:
         return [dict(p) for p in self._data["proxies"]]
+
+    async def count_proxies(self) -> int:
+        return len(self._data["proxies"])
 
     async def get_proxy(self, proxy_id: str) -> dict | None:
         for p in self._data["proxies"]:
@@ -698,7 +715,7 @@ class JSONStorage(StorageBackend):
                     "tool_name": c.get("tool_name"),
                     "duration_ms": c.get("duration_ms"),
                     "success": c.get("success"),
-                    "timestamp": c.get("timestamp").isoformat() if isinstance(c.get("timestamp"), datetime) else c.get("timestamp"),
+                    "timestamp": (ts.isoformat() if isinstance(ts := c.get("timestamp"), datetime) else ts),
                 }
                 for c in recent
             ],

@@ -119,7 +119,7 @@ export default function Tools() {
                 <td className="px-4 py-3 text-slate-600">{t.tags?.join(", ") || "—"}</td>
                 <td className="px-4 py-3 text-slate-600">{t.domain?.length ? t.domain.join(", ") : "—"}</td>
                 <td className="px-4 py-3 text-right">
-                  <ToolEditDialog tool={t} onSave={(data) => update(t.id, data)} />
+                  <ToolEditDialog tool={t} domains={domains} onSave={(data) => update(t.id, data)} />
                 </td>
               </tr>
             ))}
@@ -133,10 +133,9 @@ export default function Tools() {
   );
 }
 
-function ToolEditDialog({ tool, onSave }: { tool: Tool; onSave: (data: Partial<Tool>) => void }) {
+function ToolEditDialog({ tool, domains, onSave }: { tool: Tool; domains: Domain[]; onSave: (data: Partial<Tool>) => void }) {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState(tool.description);
-  const [domains, setDomains] = useState<Domain[]>([]);
   const [domainsSelected, setDomainsSelected] = useState<string[]>([]);
   const [tags, setTags] = useState(tool.tags?.join(", ") || "");
   const [enabled, setEnabled] = useState(tool.enabled);
@@ -146,7 +145,6 @@ function ToolEditDialog({ tool, onSave }: { tool: Tool; onSave: (data: Partial<T
     setDomainsSelected(tool.domain || []);
     setTags(tool.tags?.join(", ") || "");
     setEnabled(tool.enabled);
-    glossaryApi.listDomains().then(setDomains).catch(() => {});
   }, [tool]);
 
   const save = () => {

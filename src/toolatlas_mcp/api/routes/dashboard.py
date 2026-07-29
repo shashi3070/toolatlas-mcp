@@ -10,26 +10,21 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/summary")
 async def dashboard_summary(storage: StorageBackend = Depends(get_storage)):
-    servers = await storage.list_servers()
-    proxies = await storage.list_proxies()
-    tools = await storage.list_tools()
+    servers_counts = await storage.count_servers()
+    total_proxies = await storage.count_proxies()
+    total_tools = await storage.count_tools()
     stats = await storage.get_call_stats()
-
-    total_servers = len(servers)
-    connected = sum(1 for s in servers if s.get("connection_status") == "connected")
-    disconnected = sum(1 for s in servers if s.get("connection_status") == "disconnected")
-    unknown = total_servers - connected - disconnected
 
     return DashboardSummaryResponse(
         servers={
-            "total": total_servers,
-            "connected": connected,
-            "disconnected": disconnected,
-            "unknown": unknown,
-            "total_tools": len(tools),
+            "total": servers_counts["total"],
+            "connected": servers_counts["connected"],
+            "disconnected": servers_counts["disconnected"],
+            "unknown": servers_counts["unknown"],
+            "total_tools": total_tools,
         },
-        proxies={"total": len(proxies)},
-        tools={"total": len(tools)},
+        proxies={"total": total_proxies},
+        tools={"total": total_tools},
         calls={
             "per_minute": stats.get("calls_per_minute", 0),
             "total": stats.get("total_calls", 0),

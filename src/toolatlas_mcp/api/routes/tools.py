@@ -30,7 +30,9 @@ async def list_tools(
             t for t in tools
             if search_lower in t.get("name", "").lower() or search_lower in t.get("description", "").lower()
         ]
-
+    servers = await storage.list_servers()
+    server_names = {s.get("id"): s.get("name") for s in servers}
+    
     result = []
     for t in tools:
         server = await storage.get_server(t.get("server_id", ""))
@@ -46,7 +48,7 @@ async def list_tools(
             tags=t.get("tags", []),
             domain=t.get("domain", []),
             glossary_term_ids=t.get("glossary_term_ids", []),
-            server_name=server.get("name") if server else None,
+            server_name=server_names.get(t.get("server_id", "")),
         ))
     return result
 

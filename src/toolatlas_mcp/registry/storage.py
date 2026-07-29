@@ -26,6 +26,9 @@ class StorageBackend:
     async def list_servers(self) -> list[Any]:
         raise NotImplementedError
 
+    async def count_servers(self) -> dict[str, int]:
+        raise NotImplementedError
+
     async def get_server(self, server_id: str) -> Any | None:
         raise NotImplementedError
 
@@ -45,6 +48,9 @@ class StorageBackend:
         raise NotImplementedError
 
     async def list_tools(self, server_id: str | None = None) -> list[Any]:
+        raise NotImplementedError
+
+    async def count_tools(self) -> int:
         raise NotImplementedError
 
     async def get_tool(self, tool_id: str) -> Any | None:
@@ -73,6 +79,9 @@ class StorageBackend:
 
     async def list_proxies(self) -> list[Any]:
         raise NotImplementedError
+
+    async def count_proxies(self) -> int:
+            raise NotImplementedError
 
     async def get_proxy(self, proxy_id: str) -> Any | None:
         raise NotImplementedError
