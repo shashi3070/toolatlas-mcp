@@ -50,13 +50,17 @@ async def full_graph(storage: StorageBackend = Depends(get_storage)):
             type="exposes",
         ))
 
-    for proxy in proxies:
-        pid = proxy.get("id", "")
-        proxy_servers = await storage.get_proxy_servers(pid)
-        for s in proxy_servers:
+    all_proxy_servers = await storage.get_all_proxy_servers()
+    proxy_to_server_ids: dict[str, list[str]] = {}
+    for ps in all_proxy_servers:
+        proxy_to_server_ids.setdefault(ps["proxy_id"], []).append(ps["server_id"])
+
+    proxy_ids = {p.get("id") for p in proxies}
+    for pid in proxy_ids:
+        for sid in proxy_to_server_ids.get(pid, []):
             edges.append(GraphEdge(
                 source=pid,
-                target=s.get("id", ""),
+                target=sid,
                 type="contains",
             ))
 

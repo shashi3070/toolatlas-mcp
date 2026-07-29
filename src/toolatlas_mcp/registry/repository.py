@@ -344,6 +344,10 @@ class RegistryRepository(StorageBackend):
         )
         return [_model_to_dict(s) for s in result.scalars().all()]
 
+    async def get_all_proxy_servers(self) -> list[dict]:
+        result = await self.db.execute(select(ProxyServer))
+        return [_model_to_dict(ps) for ps in result.scalars().all()]
+
     # ---- Proxy-Tool settings ----
 
     async def get_tool_setting(self, proxy_id: str, tool_id: str) -> dict | None:

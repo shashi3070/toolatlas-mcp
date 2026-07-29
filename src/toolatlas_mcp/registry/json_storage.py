@@ -429,6 +429,9 @@ class JSONStorage(StorageBackend):
             if s["id"] in server_ids
         ]
 
+    async def get_all_proxy_servers(self) -> list[dict]:
+        return [dict(ps) for ps in self._data["proxy_servers"]]
+
     # ---- Proxy-Tool settings ----
 
     async def get_tool_setting(self, proxy_id: str, tool_id: str) -> dict | None:

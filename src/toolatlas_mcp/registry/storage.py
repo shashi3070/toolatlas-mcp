@@ -107,6 +107,9 @@ class StorageBackend:
     async def get_proxy_servers(self, proxy_id: str) -> list[Any]:
         raise NotImplementedError
 
+    async def get_all_proxy_servers(self) -> list[dict]:
+        raise NotImplementedError
+
     async def get_tool_setting(self, proxy_id: str, tool_id: str) -> Any | None:
         raise NotImplementedError
 

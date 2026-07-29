@@ -123,9 +123,17 @@ async def get_proxy_tools(proxy_id: str, storage: StorageBackend = Depends(get_s
     servers = await storage.get_proxy_servers(proxy_id)
     tool_settings = await storage.get_tool_settings_for_proxy(proxy_id)
     glossary_terms = {gt["id"]: gt for gt in await storage.list_glossary_terms()}
+    all_tools = await storage.list_tools()
+    server_ids = {s.get("id") for s in servers}
+    tools_by_server: dict[str, list[dict]] = {}
+    for t in all_tools:
+        sid = t.get("server_id", "")
+        if sid in server_ids:
+            tools_by_server.setdefault(sid, []).append(t)
+
     tools = []
     for server in servers:
-        server_tools = await storage.list_tools(server_id=server.get("id"))
+        server_tools = tools_by_server.get(server.get("id", ""), [])
         for t in server_tools:
             setting = tool_settings.get(t.get("id", ""))
             display_desc = setting.get("custom_description") if setting and setting.get("custom_description") else t.get("description", "")
@@ -205,13 +213,22 @@ async def get_proxy_designer(proxy_id: str, storage: StorageBackend = Depends(ge
         raise HTTPException(404, "Proxy not found")
 
     servers = await storage.get_proxy_servers(proxy_id)
+    all_tools = await storage.list_tools()
+    all_settings = await storage.get_tool_settings_for_proxy(proxy_id)
+    server_ids = {s.get("id") for s in servers}
+    tools_by_server: dict[str, list[dict]] = {}
+    for t in all_tools:
+        sid = t.get("server_id", "")
+        if sid in server_ids:
+            tools_by_server.setdefault(sid, []).append(t)
+
     designer_servers = []
     for server in servers:
         sid = server.get("id", "")
-        server_tools = await storage.list_tools(server_id=sid)
+        server_tools = tools_by_server.get(sid, [])
         tool_list = []
         for t in server_tools:
-            setting = await storage.get_tool_setting(proxy_id, t.get("id", ""))
+            setting = all_settings.get(t.get("id", ""))
             tool_list.append({
                 "id": t.get("id", ""),
                 "name": t.get("name", ""),
