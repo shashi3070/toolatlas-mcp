@@ -562,6 +562,7 @@ class RegistryRepository(StorageBackend):
     async def list_calls(
         self, proxy_id: str | None = None, tool_id: str | None = None,
         org_id: str | None = None, tenant_id: str | None = None,
+        trace_id: str | None = None,
         limit: int = 100, offset: int = 0,
     ) -> list[dict]:
         stmt = select(ToolCall).order_by(ToolCall.timestamp.desc())
@@ -573,9 +574,43 @@ class RegistryRepository(StorageBackend):
             stmt = stmt.where(ToolCall.org_id == org_id)
         if tenant_id:
             stmt = stmt.where(ToolCall.tenant_id == tenant_id)
+        if trace_id:
+            stmt = stmt.where(ToolCall.trace_id == trace_id)
         stmt = stmt.offset(offset).limit(limit)
         result = await self.db.execute(stmt)
         return [_model_to_dict(c) for c in result.scalars().all()]
+
+    async def get_tool_latency_stats(self, limit: int = 20) -> list[dict]:
+        from sqlalchemy import func
+
+        result = await self.db.execute(
+            select(
+                ToolCall.tool_name,
+                func.avg(ToolCall.duration_ms).label("avg_latency_ms"),
+            )
+            .group_by(ToolCall.tool_name)
+            .order_by(func.avg(ToolCall.duration_ms).desc())
+            .limit(limit)
+        )
+        return [
+            {"name": row[0], "avg_latency_ms": round(float(row[1]), 2)}
+            for row in result.all()
+        ]
+
+    async def get_error_rate(self) -> dict[str, Any]:
+        from sqlalchemy import func
+
+        total = await self.db.execute(select(func.count(ToolCall.id)))
+        errors = await self.db.execute(
+            select(func.count(ToolCall.id)).where(ToolCall.success == False)  # noqa: E712
+        )
+        t = total.scalar() or 0
+        e = errors.scalar() or 0
+        return {
+            "total": t,
+            "error_count": e,
+            "error_rate": round(e / t * 100, 2) if t else 0,
+        }
 
     async def get_call_stats(self) -> dict[str, Any]:
         from datetime import datetime, timedelta, timezone

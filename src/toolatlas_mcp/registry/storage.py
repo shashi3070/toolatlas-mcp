@@ -171,10 +171,16 @@ class StorageBackend:
     async def get_call(self, call_id: str) -> Any | None:
         raise NotImplementedError
 
-    async def list_calls(self, proxy_id: str | None = None, tool_id: str | None = None, org_id: str | None = None, tenant_id: str | None = None, limit: int = 100, offset: int = 0) -> list[Any]:
+    async def list_calls(self, proxy_id: str | None = None, tool_id: str | None = None, org_id: str | None = None, tenant_id: str | None = None, trace_id: str | None = None, limit: int = 100, offset: int = 0) -> list[Any]:
         raise NotImplementedError
 
     async def get_call_stats(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def get_tool_latency_stats(self, limit: int = 20) -> list[dict]:
+        raise NotImplementedError
+
+    async def get_error_rate(self) -> dict[str, Any]:
         raise NotImplementedError
 
     async def get_proxy_stats(self, proxy_id: str) -> dict[str, Any]:

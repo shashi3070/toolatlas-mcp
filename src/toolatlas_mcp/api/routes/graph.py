@@ -106,9 +106,7 @@ async def list_traces(
     proxy_id: str | None = Query(None),
     storage: StorageBackend = Depends(get_storage),
 ):
-    calls = await storage.list_calls(limit=10000)
-    if proxy_id:
-        calls = [c for c in calls if c.get("proxy_id") == proxy_id]
+    calls = await storage.list_calls(limit=10000, proxy_id=proxy_id)
 
     traces: dict[str, list[dict]] = defaultdict(list)
     for c in calls:
@@ -141,8 +139,8 @@ async def trace_graph(
     trace_id: str,
     storage: StorageBackend = Depends(get_storage),
 ):
-    calls = await storage.list_calls(limit=10000)
-    trace_calls = [c for c in calls if c.get("trace_id") == trace_id]
+    calls = await storage.list_calls(limit=10000, trace_id=trace_id)
+    trace_calls = calls
     if not trace_calls:
         raise HTTPException(404, "Trace not found")
 
@@ -218,9 +216,7 @@ async def co_occurrence(
     limit: int = Query(100, ge=1, le=500),
     storage: StorageBackend = Depends(get_storage),
 ):
-    calls = await storage.list_calls(limit=10000)
-    if proxy_id:
-        calls = [c for c in calls if c.get("proxy_id") == proxy_id]
+    calls = await storage.list_calls(limit=10000, proxy_id=proxy_id)
 
     # Group by trace
     traces: dict[str, list[dict]] = defaultdict(list)

@@ -655,6 +655,7 @@ class JSONStorage(StorageBackend):
     async def list_calls(
         self, proxy_id: str | None = None, tool_id: str | None = None,
         org_id: str | None = None, tenant_id: str | None = None,
+        trace_id: str | None = None,
         limit: int = 100, offset: int = 0,
     ) -> list[dict]:
         calls = sorted(self._data["calls"], key=lambda c: c.get("timestamp", ""), reverse=True)
@@ -666,7 +667,31 @@ class JSONStorage(StorageBackend):
             calls = [c for c in calls if c.get("org_id") == org_id]
         if tenant_id:
             calls = [c for c in calls if c.get("tenant_id") == tenant_id]
+        if trace_id:
+            calls = [c for c in calls if c.get("trace_id") == trace_id]
         return [dict(c) for c in calls[offset:offset + limit]]
+
+    async def get_tool_latency_stats(self, limit: int = 20) -> list[dict]:
+        durations: dict[str, list[float]] = {}
+        for c in self._data["calls"]:
+            name = c.get("tool_name", "?")
+            dur = c.get("duration_ms", 0)
+            durations.setdefault(name, []).append(dur)
+        averages = [(name, sum(durs) / len(durs)) for name, durs in durations.items()]
+        averages.sort(key=lambda x: -x[1])
+        return [{"name": name, "avg_latency_ms": round(avg, 2)} for name, avg in averages[:limit]]
+
+    async def get_error_rate(self) -> dict[str, Any]:
+        calls = self._data["calls"]
+        total = len(calls)
+        if total == 0:
+            return {"total": 0, "error_count": 0, "error_rate": 0}
+        errors = sum(1 for c in calls if not c.get("success", True))
+        return {
+            "total": total,
+            "error_count": errors,
+            "error_rate": round(errors / total * 100, 2),
+        }
 
     async def get_call_stats(self) -> dict[str, Any]:
         total = len(self._data["calls"])
