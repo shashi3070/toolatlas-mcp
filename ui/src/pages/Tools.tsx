@@ -14,17 +14,23 @@ export default function Tools() {
   const [filterDomain, setFilterDomain] = useState("");
   const [search, setSearch] = useState("");
 
-  const load = () => Promise.all([
-    toolsApi.list(),
-    serversApi.list(),
-    glossaryApi.listDomains().catch(() => []),
-  ]).then(([t, s, d]) => { setTools(t); setServers(s); setDomains(d); }).finally(() => setLoading(false));
-
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const s = ctrl.signal;
+    const cancelled = () => ctrl.signal.aborted;
+    Promise.all([
+      toolsApi.list(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      serversApi.list(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      glossaryApi.listDomains(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+    ]).then(([t, srv, d]) => { if (!cancelled()) { setTools(t); setServers(srv); setDomains(d); } }).catch(() => {}).finally(() => { if (!cancelled()) setLoading(false); });
+    return () => ctrl.abort();
+  }, []);
 
   const update = async (id: string, data: Partial<Tool>) => {
     await toolsApi.update(id, data);
-    load();
+    toolsApi.list().then(setTools).catch(() => {});
+    serversApi.list().then(setServers).catch(() => {});
+    glossaryApi.listDomains().then(setDomains).catch(() => {});
   };
 
   if (loading) return <Loading />;

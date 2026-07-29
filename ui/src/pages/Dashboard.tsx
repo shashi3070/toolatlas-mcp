@@ -10,7 +10,10 @@ export default function Dashboard() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    dashboardApi.summary().then(setData).finally(() => setLoaded(true));
+    const ctrl = new AbortController();
+    let mounted = true;
+    dashboardApi.summary(ctrl.signal).then(setData).catch(() => {}).finally(() => { if (mounted) setLoaded(true); });
+    return () => { mounted = false; ctrl.abort(); };
   }, []);
 
   if (!loaded) {

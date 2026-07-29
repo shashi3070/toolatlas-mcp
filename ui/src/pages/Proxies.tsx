@@ -14,9 +14,14 @@ export default function Proxies() {
   const [description, setDescription] = useState("");
   const [search, setSearch] = useState("");
 
-  const load = () => proxiesApi.list().then(setProxies).finally(() => setLoading(false));
+  const refresh = () => proxiesApi.list().then(setProxies).catch(() => {});
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let mounted = true;
+    proxiesApi.list(ctrl.signal).then(setProxies).catch(() => {}).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; ctrl.abort(); };
+  }, []);
 
   if (loading) return <Loading />;
 
@@ -31,13 +36,13 @@ export default function Proxies() {
     setName("");
     setSlug("");
     setDescription("");
-    load();
+    refresh();
   };
 
   const remove = async (id: string) => {
     if (confirm("Delete this proxy?")) {
       await proxiesApi.delete(id);
-      load();
+      refresh();
     }
   };
 

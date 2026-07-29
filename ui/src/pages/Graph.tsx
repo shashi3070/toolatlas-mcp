@@ -29,15 +29,22 @@ export default function Graph() {
   const networkInstance = useRef<Network | null>(null);
 
   useEffect(() => {
-    proxiesApi.list().then(setProxies).catch(() => null).finally(() => setLoading(false));
+    const ctrl = new AbortController();
+    let mounted = true;
+    proxiesApi.list(ctrl.signal).then(setProxies).catch(() => {}).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; ctrl.abort(); };
   }, []);
 
   useEffect(() => {
+    const ctrl = new AbortController();
+    let mounted = true;
+    const s = ctrl.signal;
     if (activeTab === "flow") {
-      graphApi.traces({ proxy_id: filterProxy || undefined }).then(setTraces).catch(() => null);
+      graphApi.traces({ proxy_id: filterProxy || undefined }, s).then((d) => { if (mounted) setTraces(d); }).catch(() => {});
     } else if (activeTab === "relationships") {
-      graphApi.coOccurrence({ proxy_id: filterProxy || undefined, min_count: 2 }).then(setCooc).catch(() => null);
+      graphApi.coOccurrence({ proxy_id: filterProxy || undefined, min_count: 2 }, s).then((d) => { if (mounted) setCooc(d); }).catch(() => {});
     }
+    return () => { mounted = false; ctrl.abort(); };
   }, [activeTab, filterProxy]);
 
   useEffect(() => {

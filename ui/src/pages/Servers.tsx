@@ -25,9 +25,14 @@ export default function Servers() {
   const [search, setSearch] = useState("");
   const [filterTransport, setFilterTransport] = useState("");
 
-  const load = () => serversApi.list().then(setServers).finally(() => setLoading(false));
+  const refresh = () => serversApi.list().then(setServers).catch(() => {});
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let mounted = true;
+    serversApi.list(ctrl.signal).then(setServers).catch(() => {}).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; ctrl.abort(); };
+  }, []);
 
   if (loading) return <Loading />;
 
@@ -101,7 +106,7 @@ export default function Servers() {
       const tools = await serversApi.discover(server.id);
       setDiscoveredTools((prev) => ({ ...prev, [server.id]: tools }));
       setShowForm(false);
-      load();
+      refresh();
     } catch (e: any) {
       alert("Save failed: " + (e?.response?.data?.detail || e.message));
     } finally {
@@ -127,7 +132,7 @@ export default function Servers() {
       const updated: Record<string, Tool[]> = { ...discoveredTools };
       delete updated[id];
       setDiscoveredTools(updated);
-      load();
+      refresh();
     }
   };
 
@@ -301,7 +306,7 @@ export default function Servers() {
                   onClick={async () => {
                     try {
                       const result = await serversApi.ping(s.id);
-                      load();
+                      refresh();
                     } catch {}
                   }}
                   className="flex items-center gap-1 text-xs text-slate-500 hover:text-green-600"
@@ -314,7 +319,7 @@ export default function Servers() {
                   onClick={async () => {
                     try {
                       await serversApi.reconnect(s.id);
-                      load();
+                      refresh();
                     } catch {}
                   }}
                   className={`flex items-center gap-1 text-xs text-slate-500 hover:text-[${primary(600)}]`}

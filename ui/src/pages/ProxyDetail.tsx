@@ -22,21 +22,30 @@ export default function ProxyDetail() {
     [serverTools, toolSearch],
   );
 
-  const load = async () => {
+  const refresh = () => {
     if (!id) return;
-    const [p, ll, all, t] = await Promise.all([
-      proxiesApi.get(id),
-      proxiesApi.servers(id),
-      serversApi.list(),
-      proxiesApi.tools(id),
-    ]);
-    setProxy(p);
-    setLinked(ll);
-    setAllServers(all);
-    setTools(t);
+    proxiesApi.get(id).then(setProxy).catch(() => {});
+    proxiesApi.servers(id).then(setLinked).catch(() => {});
+    serversApi.list().then(setAllServers).catch(() => {});
+    proxiesApi.tools(id).then(setTools).catch(() => {});
   };
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    if (!id) return;
+    const ctrl = new AbortController();
+    let mounted = true;
+    const s = ctrl.signal;
+    Promise.all([
+      proxiesApi.get(id, s).catch((e) => { if (e.name !== "CanceledError") throw e; return null; }),
+      proxiesApi.servers(id, s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      serversApi.list(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      proxiesApi.tools(id, s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+    ]).then(([p, ll, all, t]) => {
+      if (!mounted || !p) return;
+      setProxy(p); setLinked(ll); setAllServers(all); setTools(t);
+    }).catch(() => {});
+    return () => { mounted = false; ctrl.abort(); };
+  }, [id]);
 
   const openToolModal = async (serverId: string) => {
     setSelectedServerId(serverId);
@@ -51,27 +60,27 @@ export default function ProxyDetail() {
     const names = serverTools.filter((t) => checkedTools.has(t.id)).map((t) => t.name);
     await proxiesApi.linkServer(id!, selectedServerId, names);
     setShowToolModal(false);
-    load();
+    refresh();
   };
 
   const unlinkServer = async (serverId: string) => {
     await proxiesApi.unlinkServer(id!, serverId);
-    load();
+    refresh();
   };
 
   const toggleTool = async (toolId: string, enabled: boolean) => {
     await proxiesApi.updateToolSetting(id!, toolId, { enabled });
-    load();
+    refresh();
   };
 
   const updateDescription = async (toolId: string, custom_description: string) => {
     await proxiesApi.updateToolSetting(id!, toolId, { custom_description });
-    load();
+    refresh();
   };
 
   const updateAlias = async (toolId: string, alias: string) => {
     await proxiesApi.updateToolSetting(id!, toolId, { alias });
-    load();
+    refresh();
   };
 
   if (!proxy) return <Loading />;
@@ -266,7 +275,10 @@ export default function ProxyDetail() {
 function ProxyStats({ proxyId }: { proxyId: string }) {
   const [stats, setStats] = useState<any>(null);
   useEffect(() => {
-    proxiesApi.stats(proxyId).then(setStats).catch(() => setStats(null));
+    const ctrl = new AbortController();
+    let mounted = true;
+    proxiesApi.stats(proxyId, ctrl.signal).then((d) => { if (mounted) setStats(d); }).catch(() => { if (mounted) setStats(null); });
+    return () => { mounted = false; ctrl.abort(); };
   }, [proxyId]);
 
   if (!stats) return <p className="text-sm text-slate-400">No data yet</p>;

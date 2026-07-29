@@ -10,14 +10,21 @@ export default function Glossary() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"domains" | "terms">("domains");
 
-  const load = () => {
-    Promise.all([
-      glossaryApi.listTerms().then(setTerms),
-      glossaryApi.listDomains().then(setDomains),
-    ]).finally(() => setLoading(false));
+  const refresh = () => {
+    glossaryApi.listTerms().then(setTerms).catch(() => {});
+    glossaryApi.listDomains().then(setDomains).catch(() => {});
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let mounted = true;
+    const s = ctrl.signal;
+    Promise.all([
+      glossaryApi.listTerms(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      glossaryApi.listDomains(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+    ]).then(([t, d]) => { if (!mounted) return; setTerms(t); setDomains(d); }).catch(() => {}).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; ctrl.abort(); };
+  }, []);
 
   if (loading) return <Loading />;
 
@@ -32,8 +39,8 @@ export default function Glossary() {
         <button onClick={() => setTab("terms")} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "terms" ? "bg-[var(--primary-600)] text-white" : "border hover:bg-slate-50"}`}>Terms</button>
       </div>
 
-      {tab === "domains" && <DomainsPanel domains={domains} onRefresh={load} />}
-      {tab === "terms" && <TermsPanel terms={terms} domains={domains} onRefresh={load} />}
+      {tab === "domains" && <DomainsPanel domains={domains} onRefresh={refresh} />}
+      {tab === "terms" && <TermsPanel terms={terms} domains={domains} onRefresh={refresh} />}
     </div>
   );
 }

@@ -26,11 +26,15 @@ export default function ToolDetail() {
 
   useEffect(() => {
     if (!id) return;
+    const ctrl = new AbortController();
+    let mounted = true;
+    const s = ctrl.signal;
     Promise.all([
-      toolsApi.get(id),
-      glossaryApi.listDomains().catch(() => []),
-      glossaryApi.listTerms().catch(() => []),
+      toolsApi.get(id, s).catch((e) => { if (e.name !== "CanceledError") throw e; return null; }),
+      glossaryApi.listDomains(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      glossaryApi.listTerms(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
     ]).then(([t, d, terms]) => {
+      if (!mounted || !t) return;
       setTool(t);
       setDomains(d);
       setTerms(terms);
@@ -48,7 +52,8 @@ export default function ToolDetail() {
       }
       setTestArgs(initial);
       setLoading(false);
-    });
+    }).catch(() => {}).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; ctrl.abort(); };
   }, [id]);
 
   const handleSave = async () => {
