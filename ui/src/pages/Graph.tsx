@@ -6,6 +6,7 @@ import {
   type TraceSummary, type TraceGraphResponse, type CoOccurrenceResponse, type Proxy,
 } from "../api/client";
 import Loading from "../components/Loading";
+import { primary, getComputedColor } from "../theme";
 
 type Tab = "flow" | "relationships" | "topology";
 
@@ -28,15 +29,22 @@ export default function Graph() {
   const networkInstance = useRef<Network | null>(null);
 
   useEffect(() => {
-    proxiesApi.list().then(setProxies).catch(() => null).finally(() => setLoading(false));
+    const ctrl = new AbortController();
+    let mounted = true;
+    proxiesApi.list(ctrl.signal).then(setProxies).catch(() => {}).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; ctrl.abort(); };
   }, []);
 
   useEffect(() => {
+    const ctrl = new AbortController();
+    let mounted = true;
+    const s = ctrl.signal;
     if (activeTab === "flow") {
-      graphApi.traces({ proxy_id: filterProxy || undefined }).then(setTraces).catch(() => null);
+      graphApi.traces({ proxy_id: filterProxy || undefined }, s).then((d) => { if (mounted) setTraces(d); }).catch(() => {});
     } else if (activeTab === "relationships") {
-      graphApi.coOccurrence({ proxy_id: filterProxy || undefined, min_count: 2 }).then(setCooc).catch(() => null);
+      graphApi.coOccurrence({ proxy_id: filterProxy || undefined, min_count: 2 }, s).then((d) => { if (mounted) setCooc(d); }).catch(() => {});
     }
+    return () => { mounted = false; ctrl.abort(); };
   }, [activeTab, filterProxy]);
 
   useEffect(() => {
@@ -59,11 +67,11 @@ export default function Graph() {
     const nodes = trace.nodes.map((n) => ({
       id: n.id,
       label: `${n.tool_name}\n${n.duration_ms.toFixed(0)}ms`,
-      color: n.success ? "#dbeafe" : "#fecaca",
+      color: n.success ? getComputedColor(100) : "#fecaca",
       shape: "box",
       font: { size: 12 },
       borderWidth: 2,
-      borderColor: n.success ? "#3b82f6" : "#ef4444",
+      borderColor: n.success ? getComputedColor(500) : "#ef4444",
     }));
     const edges = trace.edges.map((e) => ({
       from: e.source,
@@ -86,7 +94,7 @@ export default function Graph() {
       id: n.id,
       label: `${n.tool_name} (${n.call_count})`,
       value: n.call_count,
-      color: "#e0f2fe",
+      color: getComputedColor(200),
       font: { size: Math.max(10, Math.min(24, 10 + (n.call_count / maxCount) * 14)) },
     }));
     const maxWeight = Math.max(...data.edges.map((e) => e.weight), 1);
@@ -107,7 +115,7 @@ export default function Graph() {
     if (!networkRef.current) return;
     const data = await graphApi.full();
     const typeColors: Record<string, string> = {
-      proxy: "#e0f2fe",
+      proxy: getComputedColor(200),
       server: "#dcfce7",
       tool: "#fef3c7",
     };
@@ -150,7 +158,7 @@ export default function Graph() {
             key={key}
             onClick={() => { setActiveTab(key); setSelectedTrace(null); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === key ? "bg-white shadow-sm text-blue-700" : "text-slate-600 hover:text-slate-800"
+              activeTab === key ? "bg-white shadow-sm text-[var(--primary-700)]" : "text-slate-600 hover:text-slate-800"
             }`}
           >
             <Icon size={16} />
@@ -202,7 +210,7 @@ export default function Graph() {
                     key={t.trace_id}
                     onClick={() => graphApi.traceDetail(t.trace_id).then(setSelectedTrace).catch(() => null)}
                     className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors ${
-                      selectedTrace?.trace_id === t.trace_id ? "bg-blue-50" : ""
+                      selectedTrace?.trace_id === t.trace_id ? "bg-[var(--primary-50)]" : ""
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -248,7 +256,7 @@ export default function Graph() {
                         <span className="text-slate-300 mx-1">↔</span>
                         <span className="font-medium">{e.target}</span>
                       </span>
-                      <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-medium">{e.weight}x</span>
+                      <span className="bg-[var(--primary-100)] text-[var(--primary-700)] text-xs px-2 py-0.5 rounded-full font-medium">{e.weight}x</span>
                     </div>
                   ))}
                 </div>
@@ -261,7 +269,7 @@ export default function Graph() {
               <h3 className="font-semibold text-sm mb-3">Legend</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-3 rounded-full bg-blue-200 border border-blue-500" />
+                  <span className="inline-block w-3 h-3 rounded-full bg-[var(--primary-200)] border border-[var(--primary-500)]" />
                   <span>Proxy</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -288,7 +296,7 @@ export default function Graph() {
             <h3 className="font-semibold">
               Trace <span className="font-mono text-sm bg-slate-100 px-2 py-0.5 rounded">{selectedTrace.trace_id.slice(0, 12)}</span>
             </h3>
-            <button onClick={() => setSelectedTrace(null)} className="text-sm text-blue-600 hover:text-blue-800">
+            <button onClick={() => setSelectedTrace(null)} className="text-sm text-[var(--primary-600)] hover:text-[var(--primary-800)]">
               Close
             </button>
           </div>

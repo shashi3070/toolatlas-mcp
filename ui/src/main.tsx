@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import { applyTheme } from "./theme";
 import "./index.css";
 
 declare global {
@@ -10,6 +11,8 @@ declare global {
   }
 }
 const basePath = window.__TOOLATLAS_BASE_PATH__ || import.meta.env.VITE_BASE_PATH || "";
+
+applyTheme();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

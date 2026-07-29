@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Wifi, RefreshCw, CheckCircle, XCircle, Search, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Wifi, RefreshCw, CheckCircle, XCircle, Search, X, PlusCircle, MinusCircle } from "lucide-react";
 import { serversApi, type Server, type Tool } from "../api/client";
 import Loading from "../components/Loading";
+import { primary } from "../theme";
 
 export default function Servers() {
   const [servers, setServers] = useState<Server[]>([]);
@@ -11,6 +12,7 @@ export default function Servers() {
   const [name, setName] = useState("");
   const [transport, setTransport] = useState("sse");
   const [url, setUrl] = useState("");
+  const [headers, setHeaders] = useState<[string, string][]>([]);
 
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
@@ -23,9 +25,14 @@ export default function Servers() {
   const [search, setSearch] = useState("");
   const [filterTransport, setFilterTransport] = useState("");
 
-  const load = () => serversApi.list().then(setServers).finally(() => setLoading(false));
+  const refresh = () => serversApi.list().then(setServers).catch(() => {});
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let mounted = true;
+    serversApi.list(ctrl.signal).then(setServers).catch(() => {}).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; ctrl.abort(); };
+  }, []);
 
   if (loading) return <Loading />;
 
@@ -40,6 +47,7 @@ export default function Servers() {
     setName("");
     setTransport("sse");
     setUrl("");
+    setHeaders([]);
     setPreviewTools(null);
     setDiscoverError("");
     setShowForm(true);
@@ -49,7 +57,8 @@ export default function Servers() {
     setEditing(s);
     setName(s.name);
     setTransport(s.transport);
-    setUrl(s.url || "");
+    setUrl(s.url || s.command || "");
+    setHeaders(Object.entries(s.headers || {}));
     setPreviewTools(null);
     setDiscoverError("");
     setShowForm(true);
@@ -60,7 +69,14 @@ export default function Servers() {
     setDiscoverError("");
     setPreviewTools(null);
     try {
-      const tools = await serversApi.discoverPreview({ transport, url });
+      const h = Object.fromEntries(headers.filter(([k]) => k.trim()));
+      const isStdio = transport === "stdio";
+      const tools = await serversApi.discoverPreview({
+        transport,
+        url: isStdio ? undefined : url,
+        command: isStdio ? url : undefined,
+        headers: Object.keys(h).length ? h : undefined,
+      });
       setPreviewTools(tools);
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e.message;
@@ -74,15 +90,23 @@ export default function Servers() {
     setSaving(true);
     try {
       let server: Server;
+      const h = Object.fromEntries(headers.filter(([k]) => k.trim()));
+      const isStdio = transport === "stdio";
+      const body = {
+        name, transport,
+        url: isStdio ? undefined : url,
+        command: isStdio ? url : undefined,
+        headers: Object.keys(h).length ? h : undefined,
+      };
       if (editing) {
-        server = await serversApi.update(editing.id, { name, transport, url });
+        server = await serversApi.update(editing.id, body);
       } else {
-        server = await serversApi.create({ name, transport, url });
+        server = await serversApi.create(body as any);
       }
       const tools = await serversApi.discover(server.id);
       setDiscoveredTools((prev) => ({ ...prev, [server.id]: tools }));
       setShowForm(false);
-      load();
+      refresh();
     } catch (e: any) {
       alert("Save failed: " + (e?.response?.data?.detail || e.message));
     } finally {
@@ -108,7 +132,7 @@ export default function Servers() {
       const updated: Record<string, Tool[]> = { ...discoveredTools };
       delete updated[id];
       setDiscoveredTools(updated);
-      load();
+      refresh();
     }
   };
 
@@ -118,7 +142,7 @@ export default function Servers() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Servers</h2>
-        <button onClick={openNew} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+        <button onClick={openNew} className={`flex items-center gap-2 bg-[${primary(600)}] text-white px-4 py-2 rounded-lg text-sm hover:bg-[${primary(700)}]`}>
           <Plus size={16} /> Add Server
         </button>
       </div>
@@ -153,6 +177,30 @@ export default function Servers() {
             )}
           </div>
 
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Headers</label>
+            <div className="space-y-2">
+              {headers.map(([k, v], i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={k} onChange={(e) => { const h = [...headers]; h[i][0] = e.target.value; setHeaders(h); }}
+                    className="w-2/5 border rounded-lg px-3 py-2 text-sm font-mono" placeholder="Authorization"
+                  />
+                  <input
+                    value={v} onChange={(e) => { const h = [...headers]; h[i][1] = e.target.value; setHeaders(h); }}
+                    className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono" placeholder="Bearer sk-..."
+                  />
+                  <button onClick={() => setHeaders(headers.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700">
+                    <MinusCircle size={18} />
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => setHeaders([...headers, ["", ""]])} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+                <PlusCircle size={16} /> Add Header
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3 mb-4">
             <button
               onClick={handleDiscover}
@@ -168,7 +216,7 @@ export default function Servers() {
               disabled={!canSave || saving}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${
                 canSave
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  ? `bg-[${primary(600)}] text-white hover:bg-[${primary(700)}]`
                   : "bg-slate-200 text-slate-400 cursor-not-allowed"
               }`}
             >
@@ -223,7 +271,7 @@ export default function Servers() {
           <option value="stdio">STDIO</option>
         </select>
         {(search || filterTransport) && (
-          <button onClick={() => { setSearch(""); setFilterTransport(""); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+          <button onClick={() => { setSearch(""); setFilterTransport(""); }} className={`text-sm text-[${primary(600)}] hover:text-[${primary(800)}] flex items-center gap-1`}>
             <X size={14} /> Clear
           </button>
         )}
@@ -258,7 +306,7 @@ export default function Servers() {
                   onClick={async () => {
                     try {
                       const result = await serversApi.ping(s.id);
-                      load();
+                      refresh();
                     } catch {}
                   }}
                   className="flex items-center gap-1 text-xs text-slate-500 hover:text-green-600"
@@ -271,10 +319,10 @@ export default function Servers() {
                   onClick={async () => {
                     try {
                       await serversApi.reconnect(s.id);
-                      load();
+                      refresh();
                     } catch {}
                   }}
-                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600"
+                  className={`flex items-center gap-1 text-xs text-slate-500 hover:text-[${primary(600)}]`}
                   title="Reconnect"
                 >
                   <RefreshCw size={12} />
@@ -283,12 +331,12 @@ export default function Servers() {
                 <button
                   onClick={() => handleDiscoverExisting(s)}
                   disabled={discoveringId === s.id}
-                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 disabled:text-slate-300"
+                  className={`flex items-center gap-1 text-sm text-[${primary(600)}] hover:text-[${primary(800)}] disabled:text-slate-300`}
                 >
                   <Wifi size={14} />
                   {discoveringId === s.id ? "Discovering..." : "Discover"}
                 </button>
-                <button onClick={() => openEdit(s)} className="p-1 hover:text-blue-600"><Pencil size={15} /></button>
+                <button onClick={() => openEdit(s)} className={`p-1 hover:text-[${primary(600)}]`}><Pencil size={15} /></button>
                 <button onClick={() => remove(s.id)} className="p-1 hover:text-red-600"><Trash2 size={15} /></button>
               </div>
             </div>

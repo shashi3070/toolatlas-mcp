@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
 import { analyticsApi, proxiesApi, toolsApi, type CallDetail, type CallRecord, type CallStats, type Proxy, type Tool } from "../api/client";
+import { primary } from "../theme";
 import Loading from "../components/Loading";
 
 const EVENT_ICONS: Record<string, string> = {
@@ -122,12 +123,22 @@ export default function Analytics() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    const ctrl = new AbortController();
+    let mounted = true;
+    const s = ctrl.signal;
     Promise.all([
-      analyticsApi.stats().then(setStats).catch(() => null),
-      analyticsApi.calls({ limit: 50 }).then(setCalls).catch(() => null),
-      proxiesApi.list().then(setProxies).catch(() => null),
-      toolsApi.list().then(setAllTools).catch(() => null),
-    ]).finally(() => setLoading(false));
+      analyticsApi.stats(s).catch((e) => { if (e.name !== "CanceledError") throw e; return null; }),
+      analyticsApi.calls({ limit: 50 }, s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      proxiesApi.list(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      toolsApi.list(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+    ]).then(([stats, calls, proxies, tools]) => {
+      if (!mounted) return;
+      if (stats) setStats(stats);
+      setCalls(calls as any[]);
+      setProxies(proxies as any[]);
+      setAllTools(tools as any[]);
+    }).catch(() => {}).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; ctrl.abort(); };
   }, []);
 
   const filtered = calls.filter((c) => {
@@ -193,7 +204,7 @@ export default function Analytics() {
             {allTools.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
           {(search || filterProxy || filterTool) && (
-            <button onClick={() => { setSearch(""); setFilterProxy(""); setFilterTool(""); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+            <button onClick={() => { setSearch(""); setFilterProxy(""); setFilterTool(""); }} className="text-sm flex items-center gap-1" style={{ color: primary("600") }} onMouseEnter={(e) => (e.currentTarget.style.color = primary("800"))} onMouseLeave={(e) => (e.currentTarget.style.color = primary("600"))}>
               <X size={14} /> Clear
             </button>
           )}

@@ -10,10 +10,11 @@ log = logging.getLogger(__name__)
 
 
 class MCPClient:
-    def __init__(self, transport: str = "sse", command: str | None = None, url: str | None = None):
+    def __init__(self, transport: str = "sse", command: str | None = None, url: str | None = None, headers: dict[str, str] | None = None):
         self.transport = transport
         self.command = command
         self.url = url
+        self.headers = headers or {}
         self._http_client: httpx.AsyncClient | None = None
         self._process: asyncio.subprocess.Process | None = None
         self._message_url: str | None = None
@@ -41,7 +42,7 @@ class MCPClient:
             sse_url += "/sse"
 
         self._endpoint_received = asyncio.Event()
-        self._http_client = httpx.AsyncClient(timeout=None)
+        self._http_client = httpx.AsyncClient(timeout=None, headers=self.headers or None)
 
         async def sse_reader():
             try:
@@ -90,7 +91,7 @@ class MCPClient:
         if not self.url:
             raise ValueError("url is required for streamable-http transport")
         self._message_url = self.url
-        self._http_client = httpx.AsyncClient(timeout=None)
+        self._http_client = httpx.AsyncClient(timeout=None, headers=self.headers or None)
 
         async def sse_reader():
             try:

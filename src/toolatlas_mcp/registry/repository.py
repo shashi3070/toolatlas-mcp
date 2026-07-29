@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from toolatlas_mcp.registry.models import (
@@ -22,8 +22,6 @@ def _utcnow():
 
 
 def _model_to_dict(model) -> dict:
-    if model is None:
-        return None
     return {c.key: getattr(model, c.key) for c in model.__table__.columns}
 
 
@@ -34,7 +32,7 @@ def _ensure_str_list(v: Any) -> list[str]:
         return [v]
     if isinstance(v, list):
         return [str(x) for x in v]
-    return v
+    return []
 
 
 class RegistryRepository(StorageBackend):
@@ -50,8 +48,15 @@ class RegistryRepository(StorageBackend):
 
     # ---- Servers ----
 
-    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> dict:
-        server = Server(name=name, transport=transport, command=command, url=url)
+    async def create_server(
+        self, name: str, transport: str = "sse",
+        command: str | None = None, url: str | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> dict:
+        server = Server(
+            name=name, transport=transport,
+            command=command, url=url, headers=headers or {},
+        )
         self.db.add(server)
         await self.commit()
         return _model_to_dict(server)
@@ -60,9 +65,24 @@ class RegistryRepository(StorageBackend):
         result = await self.db.execute(select(Server).order_by(Server.name))
         return [_model_to_dict(s) for s in result.scalars().all()]
 
+    async def count_servers(self) -> dict[str, int]:
+        from sqlalchemy import func
+        result = await self.db.execute(
+            select(Server.connection_status, func.count(Server.id))
+            .group_by(Server.connection_status)
+        )
+        by_status = {status or "unknown": count for status, count in result.all()}
+        return {
+            "total": sum(by_status.values()),
+            "connected": by_status.get("connected", 0),
+            "disconnected": by_status.get("disconnected", 0),
+            "unknown": sum(c for s, c in by_status.items()
+                          if s not in ("connected", "disconnected")),
+        }
+
     async def get_server(self, server_id: str) -> dict | None:
         s = await self.db.get(Server, server_id)
-        return _model_to_dict(s)
+        return _model_to_dict(s) if s else None
 
     async def update_server(self, server_id: str, **kwargs) -> dict | None:
         server = await self.db.get(Server, server_id)
@@ -71,7 +91,7 @@ class RegistryRepository(StorageBackend):
         for k, v in kwargs.items():
             if hasattr(server, k):
                 setattr(server, k, v)
-        server.updated_at = _utcnow()
+        server.updated_at = _utcnow()  # type: ignore[assignment]
         await self.commit()
         return _model_to_dict(server)
 
@@ -79,7 +99,7 @@ class RegistryRepository(StorageBackend):
                                     latency_ms: float | None = None,
                                     reconnect_count: int | None = None,
                                     last_heartbeat=None) -> dict | None:
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if connection_status is not None:
             kwargs["connection_status"] = connection_status
         if latency_ms is not None:
@@ -98,28 +118,30 @@ class RegistryRepository(StorageBackend):
         return result.scalar() or 0
 
     async def delete_server(self, server_id: str) -> bool:
-        server = await self.db.get(Server, server_id)
-        if not server:
-            return False
-        await self.db.delete(server)
+        # Use bulk DELETE — DB-level ON DELETE CASCADE handles tools,
+        # proxy_links, proxy_tool_settings, and SET NULL on calls.
+        result = await self.db.execute(delete(Server).where(Server.id == server_id))
         await self.commit()
-        return True
+        return bool(result.rowcount)  # type: ignore[attr-defined]
 
     # ---- Tools ----
 
-    async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any], auto_commit: bool = True) -> dict:
+    async def upsert_tool(
+        self, server_id: str, name: str, description: str,
+        input_schema: dict[str, Any], auto_commit: bool = True,
+    ) -> dict:
         result = await self.db.execute(
             select(Tool).where(Tool.server_id == server_id, Tool.name == name)
         )
         tool = result.scalar_one_or_none()
         if tool:
-            if not tool.original_description:
-                tool.original_description = description
-            if not tool.description or tool.description == tool.original_description:
-                tool.description = description
+            if not tool.original_description:  # type: ignore[truthy-bool]
+                tool.original_description = description  # type: ignore[assignment]
+            if not tool.description or tool.description == tool.original_description:  # type: ignore[truthy-bool]
+                tool.description = description  # type: ignore[assignment]
             if input_schema:
-                tool.input_schema = input_schema
-            tool.updated_at = _utcnow()
+                tool.input_schema = input_schema  # type: ignore[assignment]
+            tool.updated_at = _utcnow()  # type: ignore[assignment]
         else:
             tool = Tool(
                 server_id=server_id,
@@ -134,16 +156,23 @@ class RegistryRepository(StorageBackend):
             await self.commit()
         return _model_to_dict(tool)
 
-    async def list_tools(self, server_id: str | None = None) -> list[dict]:
+    async def list_tools(self, server_id: str | None = None, server_ids: list[str] | None = None) -> list[dict]:
         stmt = select(Tool).order_by(Tool.server_id, Tool.name)
         if server_id:
             stmt = stmt.where(Tool.server_id == server_id)
+        elif server_ids:
+            stmt = stmt.where(Tool.server_id.in_(server_ids))
         result = await self.db.execute(stmt)
         return [_model_to_dict(t) for t in result.scalars().all()]
 
+    async def count_tools(self) -> int:
+        from sqlalchemy import func
+        result = await self.db.execute(select(func.count(Tool.id)))
+        return result.scalar() or 0
+
     async def get_tool(self, tool_id: str) -> dict | None:
         t = await self.db.get(Tool, tool_id)
-        return _model_to_dict(t)
+        return _model_to_dict(t) if t else None
 
     async def update_tool(self, tool_id: str, **kwargs) -> dict | None:
         tool = await self.db.get(Tool, tool_id)
@@ -152,17 +181,73 @@ class RegistryRepository(StorageBackend):
         for k, v in kwargs.items():
             if hasattr(tool, k):
                 setattr(tool, k, v)
-        tool.updated_at = _utcnow()
+        tool.updated_at = _utcnow()  # type: ignore[assignment]
         await self.commit()
         return _model_to_dict(tool)
 
-    async def delete_tool(self, tool_id: str) -> bool:
-        tool = await self.db.get(Tool, tool_id)
-        if not tool:
-            return False
-        await self.db.delete(tool)
-        await self.commit()
-        return True
+    async def delete_tool(self, tool_id: str, auto_commit: bool = True) -> bool:
+        result = await self.db.execute(delete(Tool).where(Tool.id == tool_id))
+        if auto_commit:
+            await self.commit()
+        return bool(result.rowcount)  # type: ignore[attr-defined]
+
+    async def upsert_tools(
+        self, server_id: str, tools: list[dict], auto_commit: bool = True,
+    ) -> list[dict]:
+        result = await self.db.execute(
+            select(Tool).where(Tool.server_id == server_id)
+        )
+        existing_by_name: dict[str, Tool] = {
+            str(t.name): t for t in result.scalars().all()
+        }
+        db_tools = []
+        for rt in tools:
+            name = rt.get("name", "")
+            description = rt.get("description", "")
+            input_schema = rt.get("input_schema", {}) or rt.get("inputSchema", {})
+            tool = existing_by_name.get(name)
+            if tool:
+                if not tool.original_description:  # type: ignore[truthy-bool]
+                    tool.original_description = description  # type: ignore[assignment]
+                if not tool.description or tool.description == tool.original_description:  # type: ignore[truthy-bool]
+                    tool.description = description  # type: ignore[assignment]
+                if input_schema:
+                    tool.input_schema = input_schema  # type: ignore[assignment]
+                tool.updated_at = _utcnow()  # type: ignore[assignment]
+            else:
+                tool = Tool(
+                    server_id=server_id, name=name, original_name=name,
+                    original_description=description, description=description,
+                    input_schema=input_schema,
+                )
+                self.db.add(tool)
+            db_tools.append(tool)
+        if auto_commit:
+            await self.commit()
+        return [_model_to_dict(t) for t in db_tools]
+
+    async def delete_tools(self, tool_ids: list[str], auto_commit: bool = True) -> int:
+        result = await self.db.execute(
+            delete(Tool).where(Tool.id.in_(tool_ids))
+        )
+        if auto_commit:
+            await self.commit()
+        return result.rowcount  # type: ignore[attr-defined]
+
+    async def get_tool_settings_for_proxy(self, proxy_id: str) -> dict[str, Any]:
+        result = await self.db.execute(
+            select(ProxyToolSetting).where(ProxyToolSetting.proxy_id == proxy_id)
+        )
+        return {str(s.tool_id): _model_to_dict(s) for s in result.scalars().all()}
+
+    async def get_proxy_server_selections(self, proxy_id: str) -> dict[str, list[str] | None]:
+        result = await self.db.execute(
+            select(ProxyServer).where(ProxyServer.proxy_id == proxy_id)
+        )
+        return {
+            str(ps.server_id): ps.selected_tools  # type: ignore[misc]
+            for ps in result.scalars().all()
+        }
 
     # ---- Proxies ----
 
@@ -178,11 +263,12 @@ class RegistryRepository(StorageBackend):
 
     async def get_proxy(self, proxy_id: str) -> dict | None:
         p = await self.db.get(Proxy, proxy_id)
-        return _model_to_dict(p)
+        return _model_to_dict(p) if p else None
 
     async def get_proxy_by_slug(self, slug: str) -> dict | None:
         result = await self.db.execute(select(Proxy).where(Proxy.slug == slug))
-        return _model_to_dict(result.scalar_one_or_none())
+        p = result.scalar_one_or_none()
+        return _model_to_dict(p) if p else None
 
     async def update_proxy(self, proxy_id: str, **kwargs) -> dict | None:
         proxy = await self.db.get(Proxy, proxy_id)
@@ -191,21 +277,26 @@ class RegistryRepository(StorageBackend):
         for k, v in kwargs.items():
             if hasattr(proxy, k):
                 setattr(proxy, k, v)
-        proxy.updated_at = _utcnow()
+        proxy.updated_at = _utcnow()  # type: ignore[assignment]
         await self.commit()
         return _model_to_dict(proxy)
 
+    async def count_proxies(self) -> int:
+        from sqlalchemy import func
+        result = await self.db.execute(select(func.count(Proxy.id)))
+        return result.scalar() or 0
+
     async def delete_proxy(self, proxy_id: str) -> bool:
-        proxy = await self.db.get(Proxy, proxy_id)
-        if not proxy:
-            return False
-        await self.db.delete(proxy)
+        result = await self.db.execute(delete(Proxy).where(Proxy.id == proxy_id))
         await self.commit()
-        return True
+        return bool(result.rowcount)  # type: ignore[attr-defined]
 
     # ---- Proxy-Server links ----
 
-    async def link_server_to_proxy(self, proxy_id: str, server_id: str, selected_tools: list[str] | None = None):
+    async def link_server_to_proxy(
+        self, proxy_id: str, server_id: str,
+        selected_tools: list[str] | None = None,
+    ):
         existing = await self.db.execute(
             select(ProxyServer).where(
                 ProxyServer.proxy_id == proxy_id, ProxyServer.server_id == server_id
@@ -214,9 +305,12 @@ class RegistryRepository(StorageBackend):
         link = existing.scalar_one_or_none()
         if link:
             if selected_tools is not None:
-                link.selected_tools = selected_tools
+                link.selected_tools = selected_tools  # type: ignore[assignment]
         else:
-            link = ProxyServer(proxy_id=proxy_id, server_id=server_id, selected_tools=selected_tools)
+            link = ProxyServer(
+                proxy_id=proxy_id, server_id=server_id,
+                selected_tools=selected_tools,
+            )
             self.db.add(link)
         await self.commit()
 
@@ -227,7 +321,9 @@ class RegistryRepository(StorageBackend):
             )
         )
         link = result.scalar_one_or_none()
-        return link.selected_tools if link else None
+        if link is None:
+            return None
+        return link.selected_tools  # type: ignore[return-value]
 
     async def unlink_server_from_proxy(self, proxy_id: str, server_id: str):
         await self.db.execute(
@@ -243,6 +339,10 @@ class RegistryRepository(StorageBackend):
         )
         return [_model_to_dict(s) for s in result.scalars().all()]
 
+    async def get_all_proxy_servers(self) -> list[dict]:
+        result = await self.db.execute(select(ProxyServer))
+        return [_model_to_dict(ps) for ps in result.scalars().all()]
+
     # ---- Proxy-Tool settings ----
 
     async def get_tool_setting(self, proxy_id: str, tool_id: str) -> dict | None:
@@ -252,7 +352,8 @@ class RegistryRepository(StorageBackend):
                 ProxyToolSetting.tool_id == tool_id,
             )
         )
-        return _model_to_dict(result.scalar_one_or_none())
+        setting = result.scalar_one_or_none()
+        return _model_to_dict(setting) if setting else None
 
     async def upsert_tool_setting(
         self, proxy_id: str, tool_id: str,
@@ -270,11 +371,11 @@ class RegistryRepository(StorageBackend):
         setting = result.scalar_one_or_none()
         if setting:
             if enabled is not None:
-                setting.enabled = enabled
+                setting.enabled = enabled  # type: ignore[assignment]
             if custom_description is not None:
-                setting.custom_description = custom_description
+                setting.custom_description = custom_description  # type: ignore[assignment]
             if alias is not None:
-                setting.alias = alias
+                setting.alias = alias  # type: ignore[assignment]
         else:
             setting = ProxyToolSetting(
                 proxy_id=proxy_id,
@@ -329,7 +430,7 @@ class RegistryRepository(StorageBackend):
         for k, v in kwargs.items():
             if hasattr(gt, k):
                 setattr(gt, k, v)
-        gt.updated_at = _utcnow()
+        gt.updated_at = _utcnow()  # type: ignore[assignment]
         await self.commit()
         return _model_to_dict(gt)
 
@@ -364,15 +465,10 @@ class RegistryRepository(StorageBackend):
         return _model_to_dict(domain)
 
     async def delete_domain(self, domain_id: str) -> bool:
-        domain = await self.db.get(Domain, domain_id)
-        if not domain:
-            return False
-        await self.db.execute(
-            delete(GlossaryTerm).where(GlossaryTerm.domain_id == domain_id)
-        )
-        await self.db.delete(domain)
+        # Glossary terms are cascade-deleted by DB (ON DELETE CASCADE)
+        result = await self.db.execute(delete(Domain).where(Domain.id == domain_id))
         await self.commit()
-        return True
+        return bool(result.rowcount)  # type: ignore[attr-defined]
 
     async def bulk_import_glossary(self, data: list[dict]) -> dict:
         created_domains = 0
@@ -394,7 +490,10 @@ class RegistryRepository(StorageBackend):
             for t in item.get("terms", []):
                 if not t.get("term"):
                     continue
-                gt = GlossaryTerm(domain_id=domain_id, term=t["term"], definition=t.get("definition", ""))
+                gt = GlossaryTerm(
+                    domain_id=domain_id, term=t["term"],
+                    definition=t.get("definition", ""),
+                )
                 self.db.add(gt)
                 created_terms += 1
             await self.commit()
@@ -447,11 +546,13 @@ class RegistryRepository(StorageBackend):
 
     async def get_call(self, call_id: str) -> dict | None:
         result = await self.db.execute(select(ToolCall).where(ToolCall.id == call_id))
-        return _model_to_dict(result.scalar_one_or_none())
+        call = result.scalar_one_or_none()
+        return _model_to_dict(call) if call else None
 
     async def list_calls(
         self, proxy_id: str | None = None, tool_id: str | None = None,
         org_id: str | None = None, tenant_id: str | None = None,
+        trace_id: str | None = None,
         limit: int = 100, offset: int = 0,
     ) -> list[dict]:
         stmt = select(ToolCall).order_by(ToolCall.timestamp.desc())
@@ -463,20 +564,55 @@ class RegistryRepository(StorageBackend):
             stmt = stmt.where(ToolCall.org_id == org_id)
         if tenant_id:
             stmt = stmt.where(ToolCall.tenant_id == tenant_id)
+        if trace_id:
+            stmt = stmt.where(ToolCall.trace_id == trace_id)
         stmt = stmt.offset(offset).limit(limit)
         result = await self.db.execute(stmt)
         return [_model_to_dict(c) for c in result.scalars().all()]
 
+    async def get_tool_latency_stats(self, limit: int = 20) -> list[dict]:
+        from sqlalchemy import func
+
+        result = await self.db.execute(
+            select(
+                ToolCall.tool_name,
+                func.avg(ToolCall.duration_ms).label("avg_latency_ms"),
+            )
+            .group_by(ToolCall.tool_name)
+            .order_by(func.avg(ToolCall.duration_ms).desc())
+            .limit(limit)
+        )
+        return [
+            {"name": row[0], "avg_latency_ms": round(float(row[1]), 2)}
+            for row in result.all()
+        ]
+
+    async def get_error_rate(self) -> dict[str, Any]:
+        from sqlalchemy import func
+
+        total = await self.db.execute(select(func.count(ToolCall.id)))
+        errors = await self.db.execute(
+            select(func.count(ToolCall.id)).where(ToolCall.success == False)  # noqa: E712
+        )
+        t = total.scalar() or 0
+        e = errors.scalar() or 0
+        return {
+            "total": t,
+            "error_count": e,
+            "error_rate": round(e / t * 100, 2) if t else 0,
+        }
+
     async def get_call_stats(self) -> dict[str, Any]:
         from datetime import datetime, timedelta, timezone
+
         from sqlalchemy import func
 
         total = await self.db.execute(select(func.count(ToolCall.id)))
         successful = await self.db.execute(
-            select(func.count(ToolCall.id)).where(ToolCall.success == True)
+            select(func.count(ToolCall.id)).where(ToolCall.success)
         )
         avg_latency = await self.db.execute(
-            select(func.avg(ToolCall.duration_ms)).where(ToolCall.success == True)
+            select(func.avg(ToolCall.duration_ms)).where(ToolCall.success)
         )
         tool_counts = await self.db.execute(
             select(ToolCall.tool_name, func.count(ToolCall.id).label("count"))
@@ -506,12 +642,12 @@ class RegistryRepository(StorageBackend):
         )
         successful = await self.db.execute(
             select(func.count(ToolCall.id)).where(
-                ToolCall.proxy_id == proxy_id, ToolCall.success == True
+                ToolCall.proxy_id == proxy_id, ToolCall.success
             )
         )
         avg_latency = await self.db.execute(
             select(func.avg(ToolCall.duration_ms)).where(
-                ToolCall.proxy_id == proxy_id, ToolCall.success == True
+                ToolCall.proxy_id == proxy_id, ToolCall.success
             )
         )
         recent = await self.db.execute(
@@ -531,7 +667,7 @@ class RegistryRepository(StorageBackend):
                     "tool_name": c.tool_name,
                     "duration_ms": c.duration_ms,
                     "success": c.success,
-                    "timestamp": c.timestamp.isoformat() if c.timestamp else None,
+                    "timestamp": c.timestamp.isoformat() if c.timestamp is not None else None,
                 }
                 for c in recent.scalars().all()
             ],

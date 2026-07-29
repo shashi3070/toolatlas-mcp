@@ -50,13 +50,17 @@ async def full_graph(storage: StorageBackend = Depends(get_storage)):
             type="exposes",
         ))
 
-    for proxy in proxies:
-        pid = proxy.get("id", "")
-        proxy_servers = await storage.get_proxy_servers(pid)
-        for s in proxy_servers:
+    all_proxy_servers = await storage.get_all_proxy_servers()
+    proxy_to_server_ids: dict[str, list[str]] = {}
+    for ps in all_proxy_servers:
+        proxy_to_server_ids.setdefault(ps["proxy_id"], []).append(ps["server_id"])
+
+    proxy_ids = {p.get("id") for p in proxies}
+    for pid in proxy_ids:
+        for sid in proxy_to_server_ids.get(pid, []):
             edges.append(GraphEdge(
                 source=pid,
-                target=s.get("id", ""),
+                target=sid,
                 type="contains",
             ))
 
@@ -102,9 +106,7 @@ async def list_traces(
     proxy_id: str | None = Query(None),
     storage: StorageBackend = Depends(get_storage),
 ):
-    calls = await storage.list_calls(limit=10000)
-    if proxy_id:
-        calls = [c for c in calls if c.get("proxy_id") == proxy_id]
+    calls = await storage.list_calls(limit=10000, proxy_id=proxy_id)
 
     traces: dict[str, list[dict]] = defaultdict(list)
     for c in calls:
@@ -137,8 +139,8 @@ async def trace_graph(
     trace_id: str,
     storage: StorageBackend = Depends(get_storage),
 ):
-    calls = await storage.list_calls(limit=10000)
-    trace_calls = [c for c in calls if c.get("trace_id") == trace_id]
+    calls = await storage.list_calls(limit=10000, trace_id=trace_id)
+    trace_calls = calls
     if not trace_calls:
         raise HTTPException(404, "Trace not found")
 
@@ -214,9 +216,7 @@ async def co_occurrence(
     limit: int = Query(100, ge=1, le=500),
     storage: StorageBackend = Depends(get_storage),
 ):
-    calls = await storage.list_calls(limit=10000)
-    if proxy_id:
-        calls = [c for c in calls if c.get("proxy_id") == proxy_id]
+    calls = await storage.list_calls(limit=10000, proxy_id=proxy_id)
 
     # Group by trace
     traces: dict[str, list[dict]] = defaultdict(list)

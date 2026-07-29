@@ -20,10 +20,13 @@ class StorageBackend:
     async def commit(self):
         pass
 
-    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> Any:
+    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None, headers: dict[str, str] | None = None) -> Any:
         raise NotImplementedError
 
     async def list_servers(self) -> list[Any]:
+        raise NotImplementedError
+
+    async def count_servers(self) -> dict[str, int]:
         raise NotImplementedError
 
     async def get_server(self, server_id: str) -> Any | None:
@@ -44,7 +47,10 @@ class StorageBackend:
     async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any], auto_commit: bool = True) -> Any:
         raise NotImplementedError
 
-    async def list_tools(self, server_id: str | None = None) -> list[Any]:
+    async def list_tools(self, server_id: str | None = None, server_ids: list[str] | None = None) -> list[Any]:
+        raise NotImplementedError
+
+    async def count_tools(self) -> int:
         raise NotImplementedError
 
     async def get_tool(self, tool_id: str) -> Any | None:
@@ -53,7 +59,19 @@ class StorageBackend:
     async def update_tool(self, tool_id: str, **kwargs) -> Any | None:
         raise NotImplementedError
 
-    async def delete_tool(self, tool_id: str) -> bool:
+    async def delete_tool(self, tool_id: str, auto_commit: bool = True) -> bool:
+        raise NotImplementedError
+
+    async def upsert_tools(self, server_id: str, tools: list[dict], auto_commit: bool = True) -> list[Any]:
+        raise NotImplementedError
+
+    async def delete_tools(self, tool_ids: list[str], auto_commit: bool = True) -> int:
+        raise NotImplementedError
+
+    async def get_tool_settings_for_proxy(self, proxy_id: str) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def get_proxy_server_selections(self, proxy_id: str) -> dict[str, list[str] | None]:
         raise NotImplementedError
 
     async def create_proxy(self, name: str, slug: str, description: str = "") -> Any:
@@ -61,6 +79,9 @@ class StorageBackend:
 
     async def list_proxies(self) -> list[Any]:
         raise NotImplementedError
+
+    async def count_proxies(self) -> int:
+            raise NotImplementedError
 
     async def get_proxy(self, proxy_id: str) -> Any | None:
         raise NotImplementedError
@@ -84,6 +105,9 @@ class StorageBackend:
         raise NotImplementedError
 
     async def get_proxy_servers(self, proxy_id: str) -> list[Any]:
+        raise NotImplementedError
+
+    async def get_all_proxy_servers(self) -> list[dict]:
         raise NotImplementedError
 
     async def get_tool_setting(self, proxy_id: str, tool_id: str) -> Any | None:
@@ -147,10 +171,16 @@ class StorageBackend:
     async def get_call(self, call_id: str) -> Any | None:
         raise NotImplementedError
 
-    async def list_calls(self, proxy_id: str | None = None, tool_id: str | None = None, org_id: str | None = None, tenant_id: str | None = None, limit: int = 100, offset: int = 0) -> list[Any]:
+    async def list_calls(self, proxy_id: str | None = None, tool_id: str | None = None, org_id: str | None = None, tenant_id: str | None = None, trace_id: str | None = None, limit: int = 100, offset: int = 0) -> list[Any]:
         raise NotImplementedError
 
     async def get_call_stats(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def get_tool_latency_stats(self, limit: int = 20) -> list[dict]:
+        raise NotImplementedError
+
+    async def get_error_rate(self) -> dict[str, Any]:
         raise NotImplementedError
 
     async def get_proxy_stats(self, proxy_id: str) -> dict[str, Any]:

@@ -20,6 +20,7 @@ export type Server = {
   reconnect_count: number;
   last_heartbeat?: string;
   last_tool_sync?: string;
+  headers?: Record<string, string>;
   created_at?: string;
   updated_at?: string;
 };
@@ -134,16 +135,16 @@ export type ToolTestResponse = {
 };
 
 export const serversApi = {
-  list: () => api.get<Server[]>("/servers").then((r) => r.data),
-  get: (id: string) => api.get<Server>(`/servers/${id}`).then((r) => r.data),
-  create: (data: { name: string; transport?: string; command?: string; url?: string }) =>
+  list: (signal?: AbortSignal) => api.get<Server[]>("/servers", { signal }).then((r) => r.data),
+  get: (id: string, signal?: AbortSignal) => api.get<Server>(`/servers/${id}`, { signal }).then((r) => r.data),
+  create: (data: { name: string; transport?: string; command?: string; url?: string; headers?: Record<string, string> }) =>
     api.post<Server>("/servers", data).then((r) => r.data),
   update: (id: string, data: Partial<Server>) =>
     api.patch<Server>(`/servers/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/servers/${id}`),
   discover: (id: string) =>
     api.post<Tool[]>(`/servers/${id}/discover`).then((r) => r.data),
-  discoverPreview: (data: { transport?: string; command?: string; url?: string }) =>
+  discoverPreview: (data: { transport?: string; command?: string; url?: string; headers?: Record<string, string> }) =>
     api.post<{ name: string; description: string; input_schema: Record<string, unknown> }[]>("/servers/discover-preview", data).then((r) => r.data),
   ping: (id: string) =>
     api.post<{ id: string; status: string; latency_ms?: number; connection_status: string; error?: string }>(`/servers/${id}/ping`).then((r) => r.data),
@@ -152,8 +153,8 @@ export const serversApi = {
 };
 
 export const toolsApi = {
-  list: () => api.get<Tool[]>("/tools").then((r) => r.data),
-  get: (id: string) => api.get<Tool>(`/tools/${id}`).then((r) => r.data),
+  list: (signal?: AbortSignal) => api.get<Tool[]>("/tools", { signal }).then((r) => r.data),
+  get: (id: string, signal?: AbortSignal) => api.get<Tool>(`/tools/${id}`, { signal }).then((r) => r.data),
   update: (id: string, data: Partial<Tool>) =>
     api.patch<Tool>(`/tools/${id}`, data).then((r) => r.data),
   test: (id: string, data: { arguments?: Record<string, unknown> }) =>
@@ -161,25 +162,25 @@ export const toolsApi = {
 };
 
 export const proxiesApi = {
-  list: () => api.get<Proxy[]>("/proxies").then((r) => r.data),
-  get: (id: string) => api.get<Proxy>(`/proxies/${id}`).then((r) => r.data),
+  list: (signal?: AbortSignal) => api.get<Proxy[]>("/proxies", { signal }).then((r) => r.data),
+  get: (id: string, signal?: AbortSignal) => api.get<Proxy>(`/proxies/${id}`, { signal }).then((r) => r.data),
   create: (data: { name: string; slug: string; description?: string }) =>
     api.post<Proxy>("/proxies", data).then((r) => r.data),
   update: (id: string, data: Partial<Proxy>) =>
     api.patch<Proxy>(`/proxies/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/proxies/${id}`),
-  servers: (id: string) =>
-    api.get<Server[]>(`/proxies/${id}/servers`).then((r) => r.data),
+  servers: (id: string, signal?: AbortSignal) =>
+    api.get<Server[]>(`/proxies/${id}/servers`, { signal }).then((r) => r.data),
   linkServer: (proxyId: string, serverId: string, toolNames?: string[]) =>
     api.post(`/proxies/${proxyId}/servers`, { server_id: serverId, tool_names: toolNames }),
   unlinkServer: (proxyId: string, serverId: string) =>
     api.delete(`/proxies/${proxyId}/servers/${serverId}`),
-  tools: (id: string) =>
-    api.get<Tool[]>(`/proxies/${id}/tools`).then((r) => r.data),
+  tools: (id: string, signal?: AbortSignal) =>
+    api.get<Tool[]>(`/proxies/${id}/tools`, { signal }).then((r) => r.data),
   updateToolSetting: (proxyId: string, toolId: string, data: { enabled?: boolean; custom_description?: string; alias?: string }) =>
     api.patch(`/proxies/${proxyId}/tools/${toolId}`, data),
-  stats: (id: string) =>
-    api.get<{ total_calls: number; successful_calls: number; avg_latency_ms: number; recent_calls: CallRecord[] }>(`/proxies/${id}/stats`).then((r) => r.data),
+  stats: (id: string, signal?: AbortSignal) =>
+    api.get<{ total_calls: number; successful_calls: number; avg_latency_ms: number; recent_calls: CallRecord[] }>(`/proxies/${id}/stats`, { signal }).then((r) => r.data),
   designer: (id: string) =>
     api.get<{ proxy: Proxy; servers: { server: Server; tools: { id: string; name: string; description: string; enabled: boolean; alias?: string; custom_description?: string }[] }[] }>(`/proxies/${id}/designer`).then((r) => r.data),
   saveDesigner: (id: string, data: { servers: { server_id: string; tools: { id: string; enabled?: boolean; alias?: string; custom_description?: string }[] }[] }) =>
@@ -187,13 +188,13 @@ export const proxiesApi = {
 };
 
 export const glossaryApi = {
-  listTerms: () => api.get<GlossaryTerm[]>("/glossary/terms").then((r) => r.data),
+  listTerms: (signal?: AbortSignal) => api.get<GlossaryTerm[]>("/glossary/terms", { signal }).then((r) => r.data),
   createTerm: (data: { domain_id: string; term: string; definition?: string }) =>
     api.post<GlossaryTerm>("/glossary/terms", data).then((r) => r.data),
   updateTerm: (id: string, data: Partial<GlossaryTerm>) =>
     api.patch<GlossaryTerm>(`/glossary/terms/${id}`, data).then((r) => r.data),
   deleteTerm: (id: string) => api.delete(`/glossary/terms/${id}`),
-  listDomains: () => api.get<Domain[]>("/glossary/domains").then((r) => r.data),
+  listDomains: (signal?: AbortSignal) => api.get<Domain[]>("/glossary/domains", { signal }).then((r) => r.data),
   createDomain: (data: { name: string; description?: string }) =>
     api.post<Domain>("/glossary/domains", data).then((r) => r.data),
   updateDomain: (id: string, data: { name?: string; description?: string }) =>
@@ -204,22 +205,22 @@ export const glossaryApi = {
 };
 
 export const analyticsApi = {
-  stats: () => api.get<CallStats>("/analytics/stats").then((r) => r.data),
-  calls: (params?: { limit?: number; offset?: number; org_id?: string; tenant_id?: string }) =>
-    api.get<CallRecord[]>("/analytics/calls", { params }).then((r) => r.data),
-  callDetail: (callId: string) =>
-    api.get<CallDetail>(`/analytics/calls/${callId}`).then((r) => r.data),
-  topTools: (limit?: number) =>
-    api.get<{ name: string; calls: number }[]>("/analytics/top-tools", { params: { limit } }).then((r) => r.data),
-  slowestTools: (limit?: number) =>
-    api.get<{ name: string; avg_latency_ms: number }[]>("/analytics/slowest-tools", { params: { limit } }).then((r) => r.data),
-  errorRates: () =>
-    api.get<{ total: number; error_count: number; error_rate: number }>("/analytics/error-rates").then((r) => r.data),
-  health: () => api.get<{ status: string; version: string }>("/health").then((r) => r.data),
+  stats: (signal?: AbortSignal) => api.get<CallStats>("/analytics/stats", { signal }).then((r) => r.data),
+  calls: (params?: { limit?: number; offset?: number; org_id?: string; tenant_id?: string }, signal?: AbortSignal) =>
+    api.get<CallRecord[]>("/analytics/calls", { params, signal }).then((r) => r.data),
+  callDetail: (callId: string, signal?: AbortSignal) =>
+    api.get<CallDetail>(`/analytics/calls/${callId}`, { signal }).then((r) => r.data),
+  topTools: (limit?: number, signal?: AbortSignal) =>
+    api.get<{ name: string; calls: number }[]>("/analytics/top-tools", { params: { limit }, signal }).then((r) => r.data),
+  slowestTools: (limit?: number, signal?: AbortSignal) =>
+    api.get<{ name: string; avg_latency_ms: number }[]>("/analytics/slowest-tools", { params: { limit }, signal }).then((r) => r.data),
+  errorRates: (signal?: AbortSignal) =>
+    api.get<{ total: number; error_count: number; error_rate: number }>("/analytics/error-rates", { signal }).then((r) => r.data),
+  health: (signal?: AbortSignal) => api.get<{ status: string; version: string }>("/health", { signal }).then((r) => r.data),
 };
 
 export const dashboardApi = {
-  summary: () => api.get<DashboardSummary>("/dashboard/summary").then((r) => r.data),
+  summary: (signal?: AbortSignal) => api.get<DashboardSummary>("/dashboard/summary", { signal }).then((r) => r.data),
 };
 
 export const searchApi = {
@@ -262,14 +263,14 @@ export type CoOccurrenceResponse = {
 };
 
 export const graphApi = {
-  full: () => api.get<GraphData>("/graph").then((r) => r.data),
-  proxy: (proxyId: string) => api.get<GraphData>(`/graph/proxy/${proxyId}`).then((r) => r.data),
-  traces: (params?: { limit?: number; proxy_id?: string }) =>
-    api.get<TraceSummary[]>("/graph/traces", { params }).then((r) => r.data),
-  traceDetail: (traceId: string) =>
-    api.get<TraceGraphResponse>(`/graph/trace/${traceId}`).then((r) => r.data),
-  coOccurrence: (params?: { proxy_id?: string; min_count?: number; limit?: number }) =>
-    api.get<CoOccurrenceResponse>("/graph/co-occurrence", { params }).then((r) => r.data),
+  full: (signal?: AbortSignal) => api.get<GraphData>("/graph", { signal }).then((r) => r.data),
+  proxy: (proxyId: string, signal?: AbortSignal) => api.get<GraphData>(`/graph/proxy/${proxyId}`, { signal }).then((r) => r.data),
+  traces: (params?: { limit?: number; proxy_id?: string }, signal?: AbortSignal) =>
+    api.get<TraceSummary[]>("/graph/traces", { params, signal }).then((r) => r.data),
+  traceDetail: (traceId: string, signal?: AbortSignal) =>
+    api.get<TraceGraphResponse>(`/graph/trace/${traceId}`, { signal }).then((r) => r.data),
+  coOccurrence: (params?: { proxy_id?: string; min_count?: number; limit?: number }, signal?: AbortSignal) =>
+    api.get<CoOccurrenceResponse>("/graph/co-occurrence", { params, signal }).then((r) => r.data),
 };
 
 export const settingsApi = {

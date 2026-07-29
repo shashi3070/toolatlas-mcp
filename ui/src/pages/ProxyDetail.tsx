@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Link2, Unlink, ToggleLeft, ToggleRight, X, Search } from "lucide-react";
 import { proxiesApi, serversApi, type Server, type Tool } from "../api/client";
 import Loading from "../components/Loading";
+import { primary } from "../theme";
 
 export default function ProxyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -21,21 +22,30 @@ export default function ProxyDetail() {
     [serverTools, toolSearch],
   );
 
-  const load = async () => {
+  const refresh = () => {
     if (!id) return;
-    const [p, ll, all, t] = await Promise.all([
-      proxiesApi.get(id),
-      proxiesApi.servers(id),
-      serversApi.list(),
-      proxiesApi.tools(id),
-    ]);
-    setProxy(p);
-    setLinked(ll);
-    setAllServers(all);
-    setTools(t);
+    proxiesApi.get(id).then(setProxy).catch(() => {});
+    proxiesApi.servers(id).then(setLinked).catch(() => {});
+    serversApi.list().then(setAllServers).catch(() => {});
+    proxiesApi.tools(id).then(setTools).catch(() => {});
   };
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    if (!id) return;
+    const ctrl = new AbortController();
+    let mounted = true;
+    const s = ctrl.signal;
+    Promise.all([
+      proxiesApi.get(id, s).catch((e) => { if (e.name !== "CanceledError") throw e; return null; }),
+      proxiesApi.servers(id, s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      serversApi.list(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      proxiesApi.tools(id, s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+    ]).then(([p, ll, all, t]) => {
+      if (!mounted || !p) return;
+      setProxy(p); setLinked(ll); setAllServers(all); setTools(t);
+    }).catch(() => {});
+    return () => { mounted = false; ctrl.abort(); };
+  }, [id]);
 
   const openToolModal = async (serverId: string) => {
     setSelectedServerId(serverId);
@@ -50,27 +60,27 @@ export default function ProxyDetail() {
     const names = serverTools.filter((t) => checkedTools.has(t.id)).map((t) => t.name);
     await proxiesApi.linkServer(id!, selectedServerId, names);
     setShowToolModal(false);
-    load();
+    refresh();
   };
 
   const unlinkServer = async (serverId: string) => {
     await proxiesApi.unlinkServer(id!, serverId);
-    load();
+    refresh();
   };
 
   const toggleTool = async (toolId: string, enabled: boolean) => {
     await proxiesApi.updateToolSetting(id!, toolId, { enabled });
-    load();
+    refresh();
   };
 
   const updateDescription = async (toolId: string, custom_description: string) => {
     await proxiesApi.updateToolSetting(id!, toolId, { custom_description });
-    load();
+    refresh();
   };
 
   const updateAlias = async (toolId: string, alias: string) => {
     await proxiesApi.updateToolSetting(id!, toolId, { alias });
-    load();
+    refresh();
   };
 
   if (!proxy) return <Loading />;
@@ -117,7 +127,7 @@ export default function ProxyDetail() {
                 <button onClick={() => {
                   const sel = document.getElementById("serverSelect") as HTMLSelectElement;
                   if (sel.value) openToolModal(sel.value);
-                }} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700">Link</button>
+                }} className="bg-[var(--primary-600)] text-white px-3 py-2 rounded-lg text-sm hover:bg-[var(--primary-700)]">Link</button>
               </div>
             </div>
           )}
@@ -204,12 +214,12 @@ export default function ProxyDetail() {
                   placeholder="Search tools..."
                   value={toolSearch}
                   onChange={(e) => setToolSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]"
                 />
               </div>
               <button
                 onClick={() => setCheckedTools(new Set(filteredTools.map((t) => t.id)))}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                className="text-xs text-[var(--primary-600)] hover:text-[var(--primary-800)] font-medium"
               >
                 Select All
               </button>
@@ -251,7 +261,7 @@ export default function ProxyDetail() {
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t">
               <button onClick={() => setShowToolModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
-              <button onClick={confirmLink} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <button onClick={confirmLink} className="px-4 py-2 text-sm bg-[var(--primary-600)] text-white rounded-lg hover:bg-[var(--primary-700)]">
                 Link ({checkedTools.size} tool{checkedTools.size !== 1 ? "s" : ""})
               </button>
             </div>
@@ -265,7 +275,10 @@ export default function ProxyDetail() {
 function ProxyStats({ proxyId }: { proxyId: string }) {
   const [stats, setStats] = useState<any>(null);
   useEffect(() => {
-    proxiesApi.stats(proxyId).then(setStats).catch(() => setStats(null));
+    const ctrl = new AbortController();
+    let mounted = true;
+    proxiesApi.stats(proxyId, ctrl.signal).then((d) => { if (mounted) setStats(d); }).catch(() => { if (mounted) setStats(null); });
+    return () => { mounted = false; ctrl.abort(); };
   }, [proxyId]);
 
   if (!stats) return <p className="text-sm text-slate-400">No data yet</p>;

@@ -47,6 +47,9 @@ class ProxyEngine:
         self.middleware = ProxyMiddleware(storage)
         self._tool_to_server: dict[str, str] = {}
         self._tool_info: dict[str, dict] = {}
+        self._tool_settings_cache: dict[str, Any] = {}
+        self._server_selections_cache: dict[str, list[str] | None] = {}
+        self._glossary_terms_cache: dict[str, dict] = {}
 
     # ------------------------------------------------------------------
     # Initialization
@@ -86,6 +89,14 @@ class ProxyEngine:
         self._tool_to_server.clear()
         self._tool_info.clear()
 
+        # Bulk fetch all tool settings, server selections, and glossary terms
+        # for this proxy — replaces N per-tool round-trips with 3 total.
+        self._tool_settings_cache = await self.storage.get_tool_settings_for_proxy(proxy["id"])
+        self._server_selections_cache = await self.storage.get_proxy_server_selections(proxy["id"])
+        self._glossary_terms_cache = {
+            gt["id"]: gt for gt in await self.storage.list_glossary_terms()
+        }
+
         try:
             for server in servers:
                 try:
@@ -112,28 +123,32 @@ class ProxyEngine:
                         )
                         continue
 
+                server_id = server["id"]
+                db_tools = await self.storage.upsert_tools(
+                    server_id=server_id,
+                    tools=[
+                        {"name": rt.get("name", ""), "description": rt.get("description", ""),
+                         "input_schema": rt.get("inputSchema", {})}
+                        for rt in remote_tools
+                    ],
+                    auto_commit=False,
+                )
+                db_tools_by_name = {t["name"]: t for t in db_tools}
+                selection = self._server_selections_cache.get(server_id)
+
                 for rt in remote_tools:
                     tool_name = rt.get("name", "")
-                    server_id = server["id"]
-
-                    db_tool = await self.storage.upsert_tool(
-                        server_id=server_id,
-                        name=tool_name,
-                        description=rt.get("description", ""),
-                        input_schema=rt.get("inputSchema", {}),
-                        auto_commit=False,
-                    )
+                    db_tool = db_tools_by_name.get(tool_name)
+                    if not db_tool:
+                        continue
 
                     if not db_tool.get("enabled", True):
                         continue
 
-                    setting = await self.storage.get_tool_setting(proxy["id"], db_tool["id"])
+                    setting = self._tool_settings_cache.get(db_tool["id"])
                     if setting and not setting.get("enabled", True):
                         continue
                     if setting is None:
-                        selection = await self.storage.get_proxy_server_selection(
-                            proxy["id"], server["id"]
-                        )
                         if selection is not None and tool_name not in selection:
                             await self.storage.upsert_tool_setting(
                                 proxy["id"], db_tool["id"], enabled=False, auto_commit=False,
@@ -171,7 +186,7 @@ class ProxyEngine:
                     if isinstance(gt_ids, str):
                         gt_ids = [gt_ids]
                     for gid in gt_ids:
-                        gt = await self.storage.get_glossary_term(gid)
+                        gt = self._glossary_terms_cache.get(gid)
                         if gt:
                             enrichment.append(
                                 f"Glossary: {gt.get('definition') or gt.get('term')}"

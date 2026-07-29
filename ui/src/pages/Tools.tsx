@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, Pencil, Search, X } from "lucide-react";
 import { toolsApi, glossaryApi, serversApi, type Tool, type Domain, type Server } from "../api/client";
+import { primary, cssVar } from "../theme";
 import Loading from "../components/Loading";
 
 export default function Tools() {
@@ -13,17 +14,23 @@ export default function Tools() {
   const [filterDomain, setFilterDomain] = useState("");
   const [search, setSearch] = useState("");
 
-  const load = () => Promise.all([
-    toolsApi.list(),
-    serversApi.list(),
-    glossaryApi.listDomains().catch(() => []),
-  ]).then(([t, s, d]) => { setTools(t); setServers(s); setDomains(d); }).finally(() => setLoading(false));
-
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const s = ctrl.signal;
+    const cancelled = () => ctrl.signal.aborted;
+    Promise.all([
+      toolsApi.list(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      serversApi.list(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+      glossaryApi.listDomains(s).catch((e) => { if (e.name !== "CanceledError") throw e; return []; }),
+    ]).then(([t, srv, d]) => { if (!cancelled()) { setTools(t); setServers(srv); setDomains(d); } }).catch(() => {}).finally(() => { if (!cancelled()) setLoading(false); });
+    return () => ctrl.abort();
+  }, []);
 
   const update = async (id: string, data: Partial<Tool>) => {
     await toolsApi.update(id, data);
-    load();
+    toolsApi.list().then(setTools).catch(() => {});
+    serversApi.list().then(setServers).catch(() => {});
+    glossaryApi.listDomains().then(setDomains).catch(() => {});
   };
 
   if (loading) return <Loading />;
@@ -76,7 +83,7 @@ export default function Tools() {
           ))}
         </select>
         {(filterServer || filterDomain || search) && (
-          <button onClick={() => { setFilterServer(""); setFilterDomain(""); setSearch(""); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+          <button onClick={() => { setFilterServer(""); setFilterDomain(""); setSearch(""); }} className={`text-sm text-[${cssVar(600)}] hover:text-[${cssVar(800)}] flex items-center gap-1`}>
             <X size={14} /> Clear
           </button>
         )}
@@ -85,7 +92,7 @@ export default function Tools() {
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-blue-50 text-left">
+            <tr className={`border-b bg-[${cssVar(50)}] text-left`}>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Server</th>
               <th className="px-4 py-3 font-medium">Description</th>
@@ -99,7 +106,7 @@ export default function Tools() {
             {filtered.map((t) => (
               <tr key={t.id} className="border-b hover:bg-slate-50">
                 <td className="px-4 py-3">
-                  <Link to={`/tools/${t.id}`} className="font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                    <Link to={`/tools/${t.id}`} className={`font-medium text-[${cssVar(600)}] hover:text-[${cssVar(800)}] flex items-center gap-1`}>
                     {t.name} <ExternalLink size={12} />
                   </Link>
                 </td>
@@ -118,7 +125,7 @@ export default function Tools() {
                 <td className="px-4 py-3 text-slate-600">{t.tags?.join(", ") || "—"}</td>
                 <td className="px-4 py-3 text-slate-600">{t.domain?.length ? t.domain.join(", ") : "—"}</td>
                 <td className="px-4 py-3 text-right">
-                  <ToolEditDialog tool={t} onSave={(data) => update(t.id, data)} />
+                  <ToolEditDialog tool={t} domains={domains} onSave={(data) => update(t.id, data)} />
                 </td>
               </tr>
             ))}
@@ -132,10 +139,9 @@ export default function Tools() {
   );
 }
 
-function ToolEditDialog({ tool, onSave }: { tool: Tool; onSave: (data: Partial<Tool>) => void }) {
+function ToolEditDialog({ tool, domains, onSave }: { tool: Tool; domains: Domain[]; onSave: (data: Partial<Tool>) => void }) {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState(tool.description);
-  const [domains, setDomains] = useState<Domain[]>([]);
   const [domainsSelected, setDomainsSelected] = useState<string[]>([]);
   const [tags, setTags] = useState(tool.tags?.join(", ") || "");
   const [enabled, setEnabled] = useState(tool.enabled);
@@ -145,7 +151,6 @@ function ToolEditDialog({ tool, onSave }: { tool: Tool; onSave: (data: Partial<T
     setDomainsSelected(tool.domain || []);
     setTags(tool.tags?.join(", ") || "");
     setEnabled(tool.enabled);
-    glossaryApi.listDomains().then(setDomains).catch(() => {});
   }, [tool]);
 
   const save = () => {
@@ -160,7 +165,7 @@ function ToolEditDialog({ tool, onSave }: { tool: Tool; onSave: (data: Partial<T
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="p-1 hover:text-blue-600"><Pencil size={15} /></button>
+      <button onClick={() => setOpen(true)} className={`p-1 hover:text-[${cssVar(600)}]`}><Pencil size={15} /></button>
       {open && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setOpen(false)}>
           <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
@@ -205,7 +210,7 @@ function ToolEditDialog({ tool, onSave }: { tool: Tool; onSave: (data: Partial<T
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">Save</button>
+              <button onClick={save} className={`text-white px-4 py-2 rounded-lg text-sm bg-[${cssVar(600)}] hover:bg-[${cssVar(700)}]`}>Save</button>
               <button onClick={() => setOpen(false)} className="border px-4 py-2 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
             </div>
           </div>

@@ -42,7 +42,8 @@ class TestComputeToolHash:
 async def test_sync_unchanged_tools():
     """2.1 Same hash → no DB changes."""
     mock_storage = AsyncMock(spec_set=["list_servers", "list_tools", "upsert_tool",
-                                        "commit", "update_server", "delete_tool",
+                                        "upsert_tools", "delete_tool", "delete_tools",
+                                        "commit", "update_server",
                                         "get_server", "list_proxies", "get_proxy_servers"])
     mock_storage.list_tools.return_value = [_make_tool("tool_a")]
 
@@ -56,17 +57,18 @@ async def test_sync_unchanged_tools():
         result = await svc._sync_server(mock_storage, mock_cm, _make_server(tool_hash=_compute_tool_hash([_make_tool("tool_a")])))
 
     assert result["unchanged"] == ["tool_a"]
-    mock_storage.upsert_tool.assert_not_called()
+    mock_storage.upsert_tools.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_sync_new_tool():
     """2.2 Server adds a tool → appears in DB."""
     mock_storage = AsyncMock(spec_set=["list_servers", "list_tools", "upsert_tool",
-                                        "commit", "update_server", "delete_tool",
+                                        "upsert_tools", "delete_tool", "delete_tools",
+                                        "commit", "update_server",
                                         "get_server", "list_proxies", "get_proxy_servers"])
     mock_storage.list_tools = AsyncMock(return_value=[])
-    mock_storage.upsert_tool = AsyncMock(return_value={"id": "t1", "name": "tool_a", "enabled": True})
+    mock_storage.upsert_tools = AsyncMock(return_value=[{"id": "t1", "name": "tool_a", "enabled": True}])
     mock_storage.commit = AsyncMock()
     mock_storage.update_server = AsyncMock()
 
@@ -80,7 +82,7 @@ async def test_sync_new_tool():
         result = await svc._sync_server(mock_storage, mock_cm, _make_server(tool_hash=""))
 
     assert result["added"] == ["tool_a"]
-    mock_storage.upsert_tool.assert_awaited_once()
+    mock_storage.upsert_tools.assert_awaited_once()
     mock_storage.commit.assert_awaited_once()
 
 
@@ -89,11 +91,12 @@ async def test_sync_removed_tool():
     """2.3 Server removes a tool → tool deleted from DB."""
     existing_tool = {"id": "t1", "name": "tool_a"}
     mock_storage = AsyncMock(spec_set=["list_servers", "list_tools", "upsert_tool",
-                                        "commit", "update_server", "delete_tool",
+                                        "upsert_tools", "delete_tool", "delete_tools",
+                                        "commit", "update_server",
                                         "get_server", "list_proxies", "get_proxy_servers"])
     mock_storage.list_tools = AsyncMock(return_value=[existing_tool])
-    mock_storage.upsert_tool = AsyncMock(return_value=existing_tool)
-    mock_storage.delete_tool = AsyncMock()
+    mock_storage.upsert_tools = AsyncMock(return_value=[])
+    mock_storage.delete_tools = AsyncMock(return_value=1)
     mock_storage.commit = AsyncMock()
     mock_storage.update_server = AsyncMock()
 
@@ -107,7 +110,7 @@ async def test_sync_removed_tool():
         result = await svc._sync_server(mock_storage, mock_cm, _make_server(tool_hash=""))
 
     assert result["removed"] == ["tool_a"]
-    mock_storage.delete_tool.assert_awaited_once_with("t1")
+    mock_storage.delete_tools.assert_awaited_once_with(["t1"], auto_commit=False)
 
 
 @pytest.mark.asyncio
@@ -115,10 +118,11 @@ async def test_sync_updated_tool():
     """2.4 Server changes tool description → updated in DB."""
     existing_tool = {"id": "t1", "name": "tool_a", "description": "Old desc"}
     mock_storage = AsyncMock(spec_set=["list_servers", "list_tools", "upsert_tool",
-                                        "commit", "update_server", "delete_tool",
+                                        "upsert_tools", "delete_tool", "delete_tools",
+                                        "commit", "update_server",
                                         "get_server", "list_proxies", "get_proxy_servers"])
     mock_storage.list_tools = AsyncMock(return_value=[existing_tool])
-    mock_storage.upsert_tool = AsyncMock(return_value=existing_tool)
+    mock_storage.upsert_tools = AsyncMock(return_value=[{"id": "t1", "name": "tool_a", "description": "New desc", "enabled": True}])
     mock_storage.commit = AsyncMock()
     mock_storage.update_server = AsyncMock()
 
@@ -132,6 +136,7 @@ async def test_sync_updated_tool():
         result = await svc._sync_server(mock_storage, mock_cm, _make_server(tool_hash=""))
 
     assert result["updated"] == ["tool_a"]
+    mock_storage.upsert_tools.assert_awaited_once()
     mock_storage.commit.assert_awaited_once()
 
 

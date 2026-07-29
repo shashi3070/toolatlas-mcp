@@ -13,6 +13,7 @@ class ServerCreate(BaseModel):
     transport: str = "sse"
     command: str | None = None
     url: str | None = None
+    headers: dict[str, str] | None = None
 
 
 class ServerUpdate(BaseModel):
@@ -21,12 +22,14 @@ class ServerUpdate(BaseModel):
     command: str | None = None
     url: str | None = None
     enabled: bool | None = None
+    headers: dict[str, str] | None = None
 
 
 class DiscoverPreviewRequest(BaseModel):
     transport: str = "sse"
     command: str | None = None
     url: str | None = None
+    headers: dict[str, str] | None = None
 
 
 class ServerResponse(ResponseModel):
@@ -36,6 +39,7 @@ class ServerResponse(ResponseModel):
     command: str | None = None
     url: str | None = None
     enabled: bool
+    headers: dict[str, str] = {}
     connection_status: str = "unknown"
     latency_ms: float | None = None
     reconnect_count: int = 0

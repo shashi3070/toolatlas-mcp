@@ -25,6 +25,7 @@ async def create_server(body: ServerCreate, storage: StorageBackend = Depends(ge
         transport=body.transport,
         command=body.command,
         url=body.url,
+        headers=body.headers,
     )
     from toolatlas_mcp.services.health_checker import ping_single_server
     try:
@@ -62,7 +63,7 @@ async def delete_server(server_id: str, storage: StorageBackend = Depends(get_st
 
 @router.post("/discover-preview")
 async def discover_preview(body: DiscoverPreviewRequest):
-    client = MCPClient(transport=body.transport, command=body.command, url=body.url)
+    client = MCPClient(transport=body.transport, command=body.command, url=body.url, headers=body.headers)
     try:
         await client.connect()
         await client.initialize()
@@ -105,7 +106,7 @@ async def reconnect_server(server_id: str, storage: StorageBackend = Depends(get
     name = server.get("name", "?")
 
     import time
-    client = MCPClient(transport=transport, command=command, url=url)
+    client = MCPClient(transport=transport, command=command, url=url, headers=server.get("headers"))
     start = time.monotonic()
     try:
         await client.connect()
@@ -147,13 +148,16 @@ async def discover_server_tools(server_id: str, storage: StorageBackend = Depend
         log.warning("Failed to discover tools from '%s': %s", server["name"], e)
         raise HTTPException(502, f"Failed to connect to server: {e}")
 
-    for rt in remote_tools:
-        await storage.upsert_tool(
-            server_id=server["id"],
-            name=rt.get("name", ""),
-            description=rt.get("description", ""),
-            input_schema=rt.get("inputSchema", {}),
-        )
+    await storage.upsert_tools(
+        server_id=server["id"],
+        tools=[
+            {"name": rt.get("name", ""), "description": rt.get("description", ""),
+             "input_schema": rt.get("inputSchema", {})}
+            for rt in remote_tools
+        ],
+        auto_commit=False,
+    )
+    await storage.commit()
 
     from datetime import datetime, timezone
     await storage.update_server(

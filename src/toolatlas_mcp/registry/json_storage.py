@@ -16,7 +16,7 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
-def _serialize(obj: Any) -> str:
+def _serialize(obj: Any) -> Any:
     if isinstance(obj, datetime):
         return obj.isoformat()
     if isinstance(obj, uuid.UUID):
@@ -87,6 +87,7 @@ class JSONStorage(StorageBackend):
             "last_heartbeat": s.get("last_heartbeat"),
             "last_tool_sync": s.get("last_tool_sync"),
             "tool_hash": s.get("tool_hash"),
+            "headers": s.get("headers") or {},
             "created_at": s.get("created_at"),
             "updated_at": s.get("updated_at"),
         }
@@ -108,7 +109,7 @@ class JSONStorage(StorageBackend):
 
     # ---- Servers ----
 
-    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None) -> dict:
+    async def create_server(self, name: str, transport: str = "sse", command: str | None = None, url: str | None = None, headers: dict[str, str] | None = None) -> dict:
         async with self._lock:
             server = {
                 "id": _uuid(),
@@ -123,6 +124,7 @@ class JSONStorage(StorageBackend):
                 "last_heartbeat": None,
                 "last_tool_sync": None,
                 "tool_hash": None,
+                "headers": headers or {},
                 "created_at": _utcnow(),
                 "updated_at": _utcnow(),
             }
@@ -132,6 +134,17 @@ class JSONStorage(StorageBackend):
 
     async def list_servers(self) -> list[dict]:
         return [self._server_to_dict(s) for s in self._data["servers"]]
+
+    async def count_servers(self) -> dict[str, int]:
+        servers = self._data["servers"]
+        connected = sum(1 for s in servers if s.get("connection_status") == "connected")
+        disconnected = sum(1 for s in servers if s.get("connection_status") == "disconnected")
+        return {
+            "total": len(servers),
+            "connected": connected,
+            "disconnected": disconnected,
+            "unknown": len(servers) - connected - disconnected,
+        }
 
     async def get_server(self, server_id: str) -> dict | None:
         for s in self._data["servers"]:
@@ -223,11 +236,17 @@ class JSONStorage(StorageBackend):
                 await self._save()
             return self._tool_to_dict(tool)
 
-    async def list_tools(self, server_id: str | None = None) -> list[dict]:
+    async def list_tools(self, server_id: str | None = None, server_ids: list[str] | None = None) -> list[dict]:
         tools = self._data["tools"]
         if server_id:
             tools = [t for t in tools if t["server_id"] == server_id]
+        elif server_ids:
+            id_set = set(server_ids)
+            tools = [t for t in tools if t["server_id"] in id_set]
         return [self._tool_to_dict(t) for t in tools]
+
+    async def count_tools(self) -> int:
+        return len(self._data["tools"])
 
     async def get_tool(self, tool_id: str) -> dict | None:
         for t in self._data["tools"]:
@@ -247,14 +266,74 @@ class JSONStorage(StorageBackend):
                     return self._tool_to_dict(t)
             return None
 
-    async def delete_tool(self, tool_id: str) -> bool:
+    async def delete_tool(self, tool_id: str, auto_commit: bool = True) -> bool:
         async with self._lock:
             before = len(self._data["tools"])
             self._data["tools"] = [t for t in self._data["tools"] if t["id"] != tool_id]
             if len(self._data["tools"]) < before:
-                await self._save()
+                if auto_commit:
+                    await self._save()
                 return True
             return False
+
+    async def upsert_tools(self, server_id: str, tools: list[dict], auto_commit: bool = True) -> list[dict]:
+        async with self._lock:
+            existing_by_name = {
+                t["name"]: t for t in self._data["tools"]
+                if t["server_id"] == server_id
+            }
+            result = []
+            for rt in tools:
+                name = rt.get("name", "")
+                description = rt.get("description", "")
+                input_schema = rt.get("input_schema", {}) or rt.get("inputSchema", {})
+                tool = existing_by_name.get(name)
+                if tool:
+                    if not tool.get("original_description"):
+                        tool["original_description"] = description
+                    if not tool.get("description") or tool["description"] == tool.get("original_description"):
+                        tool["description"] = description
+                    if input_schema:
+                        tool["input_schema"] = input_schema
+                    tool["updated_at"] = _utcnow()
+                else:
+                    tool = {
+                        "id": _uuid(), "server_id": server_id, "name": name,
+                        "original_name": name, "original_description": description,
+                        "description": description, "input_schema": input_schema,
+                        "enabled": True, "tags": [], "domain": [],
+                        "glossary_term_ids": [],
+                        "created_at": _utcnow(), "updated_at": _utcnow(),
+                    }
+                    self._data["tools"].append(tool)
+                result.append(self._tool_to_dict(tool))
+            if auto_commit:
+                await self._save()
+            return result
+
+    async def delete_tools(self, tool_ids: list[str], auto_commit: bool = True) -> int:
+        async with self._lock:
+            before = len(self._data["tools"])
+            id_set = set(tool_ids)
+            self._data["tools"] = [t for t in self._data["tools"] if t["id"] not in id_set]
+            removed = before - len(self._data["tools"])
+            if removed and auto_commit:
+                await self._save()
+            return removed
+
+    async def get_tool_settings_for_proxy(self, proxy_id: str) -> dict[str, Any]:
+        return {
+            ts["tool_id"]: dict(ts)
+            for ts in self._data["proxy_tool_settings"]
+            if ts["proxy_id"] == proxy_id
+        }
+
+    async def get_proxy_server_selections(self, proxy_id: str) -> dict[str, list[str] | None]:
+        return {
+            ps["server_id"]: ps.get("selected_tools")
+            for ps in self._data["proxy_servers"]
+            if ps["proxy_id"] == proxy_id
+        }
 
     # ---- Proxies ----
 
@@ -274,6 +353,9 @@ class JSONStorage(StorageBackend):
 
     async def list_proxies(self) -> list[dict]:
         return [dict(p) for p in self._data["proxies"]]
+
+    async def count_proxies(self) -> int:
+        return len(self._data["proxies"])
 
     async def get_proxy(self, proxy_id: str) -> dict | None:
         for p in self._data["proxies"]:
@@ -349,6 +431,9 @@ class JSONStorage(StorageBackend):
             self._server_to_dict(s) for s in self._data["servers"]
             if s["id"] in server_ids
         ]
+
+    async def get_all_proxy_servers(self) -> list[dict]:
+        return [dict(ps) for ps in self._data["proxy_servers"]]
 
     # ---- Proxy-Tool settings ----
 
@@ -573,6 +658,7 @@ class JSONStorage(StorageBackend):
     async def list_calls(
         self, proxy_id: str | None = None, tool_id: str | None = None,
         org_id: str | None = None, tenant_id: str | None = None,
+        trace_id: str | None = None,
         limit: int = 100, offset: int = 0,
     ) -> list[dict]:
         calls = sorted(self._data["calls"], key=lambda c: c.get("timestamp", ""), reverse=True)
@@ -584,7 +670,31 @@ class JSONStorage(StorageBackend):
             calls = [c for c in calls if c.get("org_id") == org_id]
         if tenant_id:
             calls = [c for c in calls if c.get("tenant_id") == tenant_id]
+        if trace_id:
+            calls = [c for c in calls if c.get("trace_id") == trace_id]
         return [dict(c) for c in calls[offset:offset + limit]]
+
+    async def get_tool_latency_stats(self, limit: int = 20) -> list[dict]:
+        durations: dict[str, list[float]] = {}
+        for c in self._data["calls"]:
+            name = c.get("tool_name", "?")
+            dur = c.get("duration_ms", 0)
+            durations.setdefault(name, []).append(dur)
+        averages = [(name, sum(durs) / len(durs)) for name, durs in durations.items()]
+        averages.sort(key=lambda x: -x[1])
+        return [{"name": name, "avg_latency_ms": round(avg, 2)} for name, avg in averages[:limit]]
+
+    async def get_error_rate(self) -> dict[str, Any]:
+        calls = self._data["calls"]
+        total = len(calls)
+        if total == 0:
+            return {"total": 0, "error_count": 0, "error_rate": 0}
+        errors = sum(1 for c in calls if not c.get("success", True))
+        return {
+            "total": total,
+            "error_count": errors,
+            "error_rate": round(errors / total * 100, 2),
+        }
 
     async def get_call_stats(self) -> dict[str, Any]:
         total = len(self._data["calls"])
@@ -636,7 +746,7 @@ class JSONStorage(StorageBackend):
                     "tool_name": c.get("tool_name"),
                     "duration_ms": c.get("duration_ms"),
                     "success": c.get("success"),
-                    "timestamp": c.get("timestamp").isoformat() if isinstance(c.get("timestamp"), datetime) else c.get("timestamp"),
+                    "timestamp": (ts.isoformat() if isinstance(ts := c.get("timestamp"), datetime) else ts),
                 }
                 for c in recent
             ],
