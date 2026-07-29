@@ -236,10 +236,13 @@ class JSONStorage(StorageBackend):
                 await self._save()
             return self._tool_to_dict(tool)
 
-    async def list_tools(self, server_id: str | None = None) -> list[dict]:
+    async def list_tools(self, server_id: str | None = None, server_ids: list[str] | None = None) -> list[dict]:
         tools = self._data["tools"]
         if server_id:
             tools = [t for t in tools if t["server_id"] == server_id]
+        elif server_ids:
+            id_set = set(server_ids)
+            tools = [t for t in tools if t["server_id"] in id_set]
         return [self._tool_to_dict(t) for t in tools]
 
     async def count_tools(self) -> int:

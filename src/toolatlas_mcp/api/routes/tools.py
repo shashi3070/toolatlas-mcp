@@ -35,7 +35,6 @@ async def list_tools(
     
     result = []
     for t in tools:
-        server = await storage.get_server(t.get("server_id", ""))
         result.append(ToolResponse(
             id=t.get("id", ""),
             server_id=t.get("server_id", ""),

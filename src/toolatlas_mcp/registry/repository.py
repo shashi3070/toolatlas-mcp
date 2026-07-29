@@ -157,10 +157,12 @@ class RegistryRepository(StorageBackend):
             await self.commit()
         return _model_to_dict(tool)
 
-    async def list_tools(self, server_id: str | None = None) -> list[dict]:
+    async def list_tools(self, server_id: str | None = None, server_ids: list[str] | None = None) -> list[dict]:
         stmt = select(Tool).order_by(Tool.server_id, Tool.name)
         if server_id:
             stmt = stmt.where(Tool.server_id == server_id)
+        elif server_ids:
+            stmt = stmt.where(Tool.server_id.in_(server_ids))
         result = await self.db.execute(stmt)
         return [_model_to_dict(t) for t in result.scalars().all()]
 

@@ -47,7 +47,7 @@ class StorageBackend:
     async def upsert_tool(self, server_id: str, name: str, description: str, input_schema: dict[str, Any], auto_commit: bool = True) -> Any:
         raise NotImplementedError
 
-    async def list_tools(self, server_id: str | None = None) -> list[Any]:
+    async def list_tools(self, server_id: str | None = None, server_ids: list[str] | None = None) -> list[Any]:
         raise NotImplementedError
 
     async def count_tools(self) -> int:

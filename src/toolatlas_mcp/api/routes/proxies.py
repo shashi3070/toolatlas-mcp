@@ -123,13 +123,11 @@ async def get_proxy_tools(proxy_id: str, storage: StorageBackend = Depends(get_s
     servers = await storage.get_proxy_servers(proxy_id)
     tool_settings = await storage.get_tool_settings_for_proxy(proxy_id)
     glossary_terms = {gt["id"]: gt for gt in await storage.list_glossary_terms()}
-    all_tools = await storage.list_tools()
-    server_ids = {s.get("id") for s in servers}
+    server_ids = [s.get("id", "") for s in servers if s.get("id")]
+    all_tools = await storage.list_tools(server_ids=server_ids)
     tools_by_server: dict[str, list[dict]] = {}
     for t in all_tools:
-        sid = t.get("server_id", "")
-        if sid in server_ids:
-            tools_by_server.setdefault(sid, []).append(t)
+        tools_by_server.setdefault(t.get("server_id", ""), []).append(t)
 
     tools = []
     for server in servers:
@@ -213,14 +211,12 @@ async def get_proxy_designer(proxy_id: str, storage: StorageBackend = Depends(ge
         raise HTTPException(404, "Proxy not found")
 
     servers = await storage.get_proxy_servers(proxy_id)
-    all_tools = await storage.list_tools()
+    server_ids = [s.get("id", "") for s in servers if s.get("id")]
+    all_tools = await storage.list_tools(server_ids=server_ids)
     all_settings = await storage.get_tool_settings_for_proxy(proxy_id)
-    server_ids = {s.get("id") for s in servers}
     tools_by_server: dict[str, list[dict]] = {}
     for t in all_tools:
-        sid = t.get("server_id", "")
-        if sid in server_ids:
-            tools_by_server.setdefault(sid, []).append(t)
+        tools_by_server.setdefault(t.get("server_id", ""), []).append(t)
 
     designer_servers = []
     for server in servers:
