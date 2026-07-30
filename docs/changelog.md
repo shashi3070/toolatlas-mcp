@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.2.0
+
+| Area | Change | Impact |
+|------|--------|--------|
+| **UI Customization** | `TOOLATLAS_TOP_TABS` (horizontal tab layout), `TOOLATLAS_PRIMARY_COLOR` (custom accent), embed mode (`?embed=true`) | Dashboard fits any brand or deployment — iframe-friendly embedding for dashboards |
+| **Auth Headers** | Per-server custom HTTP headers for MCP connections | API keys, bearer tokens, and auth headers now supported for SSE/HTTP servers |
+| **Performance** | Bulk `upsert_tools`/`delete_tools`, SQL `GROUP BY` aggregations, `server_ids` filter, ORM cascade → bulk DELETE, per-task DB sessions | /discover: 1 bulk upsert vs 115 individual; analytics no longer loads 10K+ records into Python |
+| **API Cancellation** | `AbortController` on all pages + `AbortSignal` in API client | No wasted requests or React warnings when switching pages mid-load |
+| **PostgreSQL** | Auto-create schema on startup, `search_path` via asyncpg `server_settings` (robust under poolers) | Zero-config PostgreSQL setup, compatible with connection poolers |
+| **Docker** | Node 20 bookworm-slim, asyncpg always installed, DATA_DIR baked in, docker-compose.yml cleanup | Smaller images, working stdio servers in Docker |
+| **Bug Fixes** | stdio transport sends `command` instead of `url`, ProcessLookupError in MCPClient.close(), mypy/ruff clean | Server form works for stdio; no crash on subprocess exit |
+
 ## v3.0.0
 
 | Area | Change | Impact |

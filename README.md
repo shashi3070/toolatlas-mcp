@@ -424,7 +424,63 @@ The `data.json` file is saved to the same data directory as the SQLite database.
 
 ---
 
-## v3.0 Advanced Features
+## v4.2.0 New Features
+
+### 🎨 UI Customization
+
+Customize the ToolAtlas dashboard to match your brand or preference:
+
+- **Top Tabs Layout** — Switch from sidebar navigation to horizontal top tabs by setting `TOOLATLAS_TOP_TABS=true`
+- **Primary Color** — Set a custom accent color via `TOOLATLAS_PRIMARY_COLOR` (e.g., `#6832ba`)
+- **Embed Mode** — Add `?embed=true` to the URL for iframe-friendly embedding (hides sidebar and header)
+
+```bash
+export TOOLATLAS_TOP_TABS=true
+export TOOLATLAS_PRIMARY_COLOR="#6832ba"
+```
+
+### 🔐 Auth Header Support for MCP Servers
+
+Add custom HTTP headers to MCP server connections — useful for API keys, bearer tokens, or any authentication scheme:
+
+- **Per-server headers** configured via the UI or API
+- Headers are passed through to `httpx.AsyncClient` for SSE/HTTP connections
+- Key-value editor in the Add/Edit Server form
+
+```json
+{
+  "Authorization": "Bearer sk-...",
+  "X-API-Key": "your-api-key"
+}
+```
+
+### ⚡ Performance Improvements
+
+| Area | Improvement |
+|------|-------------|
+| **N+1 Query Fixes** | Bulk `upsert_tools`/`delete_tools` replaces per-tool loops — /discover: 1 bulk upsert vs 115 individual |
+| **Analytics** | SQL `GROUP BY` aggregations instead of loading 10K+ records into Python |
+| **Tool Discovery** | `list_tools` filter by server_ids — only fetch relevant tools |
+| **Deletes** | ORM cascade deletes replaced with bulk `DELETE` + DB-level `ON DELETE CASCADE` |
+| **UI** | `AbortController` cancels in-flight API requests on page navigation — no wasted requests or React warnings |
+
+### 🧪 Playwright E2E Tests
+
+5 new Playwright e2e tests verifying:
+- No errors during rapid navigation
+- Mid-request page changes
+- Graph tab switching
+- Proxy detail navigation
+- Tool edit dialog
+
+### 🐳 Docker Improvements
+
+- Node 20 `bookworm-slim` base for UI build stage
+- Auto-create PostgreSQL schema on startup
+- Always install `asyncpg` in Docker image
+- `TOOLATLAS_DATA_DIR` baked into image (`/data`)
+
+### v3.0 Advanced Features
 
 ### 🔌 Plugin System
 
@@ -694,6 +750,8 @@ Set via environment variables with `TOOLATLAS_` prefix. A `.env` file in the wor
 | `TOOLATLAS_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
 | `TOOLATLAS_BASE_PATH` | `""` | URL prefix when deployed behind a reverse proxy (e.g. `/toolatlas`) |
 | `TOOLATLAS_REDIS_URL` | `""` | Redis URL for shared cache layer (e.g. `redis://localhost:6379/0`) |
+| `TOOLATLAS_TOP_TABS` | `false` | Use horizontal tab layout instead of sidebar |
+| `TOOLATLAS_PRIMARY_COLOR` | `#2563eb` | Primary accent color for the UI (hex) |
 | `TOOLATLAS_CACHE_TTL` | `300` | Cache TTL in seconds for proxy tool listings |
 | `TOOLATLAS_REGISTRY_SYNC_INTERVAL` | `30` | Background sync interval in seconds |
 | `TOOLATLAS_PLUGINS` | `[]` | Comma-separated list of plugin entry-point names or module paths to load |
